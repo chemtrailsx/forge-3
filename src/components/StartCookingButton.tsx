@@ -1,0 +1,45 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+/** Creates a cooking session for a recipe, then hands over to the voice screen. */
+export function StartCookingButton({ recipeId, label = 'Start cooking' }: { recipeId: string; label?: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function start() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeId }),
+      });
+      const body = (await response.json()) as
+        | { session: { id: string } }
+        | { error: { message: string } };
+
+      if (!response.ok || !('session' in body)) {
+        setError('error' in body ? body.error.message : 'Could not start cooking.');
+        setBusy(false);
+        return;
+      }
+      router.push(`/cook/${body.session.id}`);
+    } catch {
+      setError('Could not start cooking.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="row">
+      <button className="primary" onClick={start} disabled={busy}>
+        {busy ? 'Starting…' : label}
+      </button>
+      {error ? <span className="small" style={{ color: 'var(--danger)' }}>{error}</span> : null}
+    </div>
+  );
+}

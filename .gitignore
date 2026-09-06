@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+build/
+next-env.d.ts
+
+# env — every real env file stays local. Only .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# test / build output
+coverage/
+*.tsbuildinfo
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+npm-debug.log*

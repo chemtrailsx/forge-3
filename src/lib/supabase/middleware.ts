@@ -1,0 +1,96 @@
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
+import { publicEnv } from '../env';
+
+/** Shape @supabase/ssr hands back; typed locally rather than imported. */
+type CookieToSet = { name: string; value: string; options?: Record<string, unknown> };
+
+/** Paths reachable without a session. Everything else requires one. */
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/signout'];
+
+function isPublic(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/**
+ * Refreshes the Supabase session cookie on every request and gates private
+ * routes.
+ *
+ * `getUser()` rather than `getSession()`: the former validates the JWT with
+ * the auth server, the latter only decodes whatever cookie was presented.
+ */
+export async function updateSession(request: NextRequest): Promise<NextResponse> {
+  let response = NextResponse.next({ request });
+
+  // Missing configuration fails *closed*: with no auth server to ask, nobody
+  // is authenticated, so private routes stay shut and the login page explains
+  // why. The alternative — a 500 on every request — hides the actual problem.
+  let env;
+  try {
+    env = publicEnv();
+  } catch {
+    const { pathname } = request.nextUrl;
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: { code: 'not_configured', message: 'Supabase is not configured.' } },
+        { status: 503 },
+      );
+    }
+    if (isPublic(pathname)) return response;
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.search = '?setup=1';
+    return NextResponse.redirect(url);
+  }
+
+  const supabase = createServerClient(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet: CookieToSet[]) {
+          for (const { name, value } of cookiesToSet) {
+            request.cookies.set(name, value);
+          }
+          response = NextResponse.next({ request });
+          for (const { name, value, options } of cookiesToSet) {
+            response.cookies.set(name, value, options);
+          }
+        },
+      },
+    },
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+
+  if (!user && !isPublic(pathname)) {
+    // API callers get a JSON 401; the mic loop must not try to parse a login
+    // page as an event stream.
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: { code: 'unauthorized', message: 'You must be signed in.' } },
+        { status: 401 },
+      );
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (user && pathname === '/login') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
+  return response;
+}
