@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   try {
     rime = rimeEnv();
   } catch (error) {
-    record('rime env', false, message(error));
+    record('rime', false, `${message(error, 'RIME_API_KEY')}. Without it there is no spoken output.`);
   }
 
   if (rime) {
@@ -137,9 +137,29 @@ function collectVoiceNames(catalog: unknown): string[] {
   return [...names];
 }
 
-function message(error: unknown): string {
+/**
+ * A missing key is the single most common reason to run this script, so it has
+ * to read as one line naming the variable — not as a serialised Zod tree.
+ */
+function message(error: unknown, apiKeyName = 'the provider API key'): string {
+  if (error && typeof error === 'object' && 'issues' in error) {
+    const issues = (error as { issues: Array<{ path: (string | number)[]; message: string }> }).issues;
+    const missing = issues
+      .filter((issue) => issue.message.toLowerCase().includes('at least 1 character') || issue.message === 'Required')
+      .map((issue) => (issue.path.join('.') === 'apiKey' ? apiKeyName : (ENV_NAMES[issue.path.join('.')] ?? issue.path.join('.'))));
+    if (missing.length > 0) return `not configured — set ${[...new Set(missing)].join(', ')} in .env.local`;
+    return issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+  }
   return error instanceof Error ? error.message : String(error);
 }
+
+/** Maps a parsed config field back to the variable a person has to set. */
+const ENV_NAMES: Record<string, string> = {
+  modelId: 'RIME_MODEL_ID',
+  voiceId: 'RIME_VOICE_ID',
+  NEXT_PUBLIC_SUPABASE_URL: 'NEXT_PUBLIC_SUPABASE_URL',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'NEXT_PUBLIC_SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)',
+};
 
 /** Minimal .env reader — avoids a dependency for something used by one script. */
 function loadEnvFile(file: string): void {

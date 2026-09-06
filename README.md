@@ -120,8 +120,19 @@ supabase/migrations/0002_rls.sql
 crafted `recipe_id` cannot create a cross-user reference, and installs a trigger that gives each new
 account a profile plus one starter recipe.
 
-For local development, turn **off** email confirmation (Authentication → Providers → Email) so
-sign-up signs you straight in.
+For local development, turn **off** email confirmation (Authentication → Providers → Email → uncheck
+"Confirm email") so sign-up signs you straight in. Leave it on and sign-up returns "check your email
+to confirm" — which works, via `/auth/callback`, but costs a round trip through your inbox on every
+fresh account.
+
+You can check which way a project is configured without opening the dashboard:
+
+```bash
+curl -s -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY" \
+  "$NEXT_PUBLIC_SUPABASE_URL/auth/v1/settings" | grep -o '"mailer_autoconfirm":[a-z]*'
+```
+
+`true` means sign-up logs you straight in; `false` means confirmation is required.
 
 ### 3. Environment
 
@@ -136,7 +147,7 @@ Every provider below has a free tier. Nothing here needs a card.
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API | Safe in the browser *because* RLS is on |
 | `SUPABASE_SERVICE_ROLE_KEY` | same page | Server only. Used by `npm run seed` and nothing else |
 | `RIME_API_KEY` | [rime.ai](https://rime.ai) | Server only |
-| `LLM_API_KEY` | [console.groq.com](https://console.groq.com) | Default model `llama-3.3-70b-versatile` |
+| `LLM_API_KEY` | [console.groq.com](https://console.groq.com) | Default model `openai/gpt-oss-120b` (free tier, supports tool calling) |
 | `STT_API_KEY` | same Groq key works | Default model `whisper-large-v3-turbo` |
 
 `LLM_BASE_URL` and `STT_ENDPOINT` default to Groq's OpenAI-compatible API. Point them anywhere

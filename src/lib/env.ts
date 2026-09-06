@@ -24,12 +24,20 @@ export type PublicEnv = z.infer<typeof publicSchema>;
 
 /**
  * Next inlines `process.env.NEXT_PUBLIC_*` at build time only when it is
- * referenced as a static property path, so these cannot be looped over.
+ * referenced as a static property path, so these cannot be looped over — which
+ * is also why the publishable-key fallback below is written out in full rather
+ * than resolved from a list of candidate names.
+ *
+ * Supabase is migrating from `anon` keys to `publishable` keys; both are the
+ * browser-safe credential and both work with the same client, so either
+ * variable name is accepted.
  */
 export function publicEnv(): PublicEnv {
   return publicSchema.parse({
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY:
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   });
 }
 
@@ -65,7 +73,7 @@ export function rimeEnv(): RimeEnv {
 
 const llmSchema = z.object({
   apiKey: nonEmpty,
-  model: nonEmpty.default('llama-3.3-70b-versatile'),
+  model: nonEmpty.default('openai/gpt-oss-120b'),
   baseUrl: nonEmpty.url().default('https://api.groq.com/openai/v1'),
 });
 

@@ -5,8 +5,14 @@ import { publicEnv } from '../env';
 /** Shape @supabase/ssr hands back; typed locally rather than imported. */
 type CookieToSet = { name: string; value: string; options?: Record<string, unknown> };
 
-/** Paths reachable without a session. Everything else requires one. */
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/signout'];
+/**
+ * Paths reachable without a session. Everything else requires one.
+ *
+ * `/api/health` is here so a deploy platform can probe liveness without
+ * credentials; the route itself withholds provider detail from anonymous
+ * callers.
+ */
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/signout', '/api/health'];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

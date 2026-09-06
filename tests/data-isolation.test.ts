@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getRecipe, listRecipes, searchRecipes, deleteRecipe, createRecipe } from '@/lib/db/recipes';
 import { getSession, listSessions, updateSession } from '@/lib/db/sessions';
@@ -105,6 +107,23 @@ describe('cross-user writes', () => {
         if (row && 'user_id' in row) expect(row.user_id).toBe(ALICE);
       }
     }
+  });
+});
+
+describe('middleware placement', () => {
+  /**
+   * This project uses a `src/` directory, so Next only loads middleware from
+   * `src/middleware.ts`. At the repository root it is silently ignored — no
+   * warning, no error, and the app still behaves correctly because every route
+   * and page authenticates independently. The only visible symptom is that
+   * sessions stop being refreshed on navigation, which surfaces later as
+   * random logouts. Cheap to assert, expensive to rediscover.
+   */
+  it('lives where Next will actually load it', () => {
+    const root = resolve(__dirname, '..');
+    expect(existsSync(resolve(root, 'src/app'))).toBe(true);
+    expect(existsSync(resolve(root, 'src/middleware.ts'))).toBe(true);
+    expect(existsSync(resolve(root, 'middleware.ts'))).toBe(false);
   });
 });
 
