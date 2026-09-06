@@ -102,7 +102,7 @@ export class VoiceClient {
     this.turnController?.abort();
     this.turnController = null;
     await this.player.clear();
-    this.recorder?.stop();
+    this.recorder?.reset();
     this.recorder = null;
     this.meter?.disconnect();
     this.micSource?.disconnect();
@@ -146,6 +146,7 @@ export class VoiceClient {
       },
     });
     this.stream = stream;
+    this.recorder = new UtteranceRecorder(context.sampleRate);
 
     await context.audioWorklet.addModule('/worklets/mic-meter.js');
     const source = context.createMediaStreamSource(stream);
@@ -154,15 +155,16 @@ export class VoiceClient {
     source.connect(meter);
 
     meter.port.onmessage = (event: MessageEvent) => {
-      const { rms } = event.data as { rms: number };
+      const { rms, samples } = event.data as { rms: number; samples: Float32Array };
+      // Buffered before the VAD is consulted, so the window that trips the
+      // onset is already in the pre-roll rather than being the first thing
+      // missing from it.
+      this.recorder?.push(samples);
       void this.onLevel(rms);
     };
 
     this.micSource = source;
     this.meter = meter;
-
-    this.recorder = new UtteranceRecorder(stream);
-    this.recorder.start();
   }
 
   private async onLevel(rms: number): Promise<void> {
@@ -252,7 +254,10 @@ export class VoiceClient {
     let transcript = '';
     try {
       const form = new FormData();
-      form.append('audio', audio, 'utterance.webm');
+      // Named from the blob's own type: a filename that disagrees with the
+      // bytes is how a valid upload still gets rejected as unreadable.
+      const extension = audio.type.includes('wav') ? 'wav' : 'webm';
+      form.append('audio', audio, `utterance.${extension}`);
       const response = await fetch('/api/stt', { method: 'POST', body: form });
       if (!response.ok) {
         this.events.onError(await errorMessage(response));

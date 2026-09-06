@@ -226,9 +226,20 @@ npm run typecheck # tsc --noEmit
 npm run lint      # eslint
 npm run build     # next build
 
-npm run preflight   # exercises every provider against its live API
-npm run verify:rls  # proves user isolation against the real database
+npm run preflight    # exercises every provider against its live API
+npm run verify:rls   # proves user isolation against the real database
+npm run verify:audio # round-trips the STT upload format through real providers
 ```
+
+`verify:audio` exists because the microphone path once failed in a way no unit
+test could see. The recorder buffered container-format chunks and kept a rolling
+pre-roll of the most recent ones, which discarded the chunk holding the stream
+header — so uploads were undecodable and the provider answered
+`invalid_media_file`. Both sides of that seam were fine; the bytes in the middle
+were not. The recorder now keeps raw Float32 windows and encodes WAV itself, so
+any run of windows is a complete signal, and this script checks it against the
+real providers without needing a microphone: Rime speaks a sentence, the app's
+own encoder packages it, and Whisper reads it back.
 
 `verify:rls` is the one that matters for the security claim. It creates two
 throwaway users, signs in as each for real JWTs, then attacks the database with
@@ -239,7 +250,7 @@ set rather than a model of it. Both users are deleted afterwards, including on
 failure. Needs `SUPABASE_SERVICE_ROLE_KEY` for setup and teardown only; the
 assertions themselves all run as ordinary users.
 
-102 tests across seven files. They run without network access or API keys: the orchestrator is an
+111 tests across eight files. They run without network access or API keys: the orchestrator is an
 async generator, so tests drive real turns with injected fake providers, and the database is an
 in-memory PostgREST double that **also simulates RLS** — a test that forgets the application-level
 filter still cannot read across users.
@@ -250,6 +261,7 @@ filter still cannot read across users.
 | `memory.test.ts` | relevance selection, avoidance priority, upsert-not-duplicate, deletion, heard-only history |
 | `tools.test.ts` | all nine tools, argument validation, ownership, scaling maths, filler wording |
 | `cooking-state.test.ts` | scaling and rounding, snapshots, timers, persistence across turns |
+| `audio-capture.test.ts` | WAV header layout, size fields, clamping, and that any run of windows still encodes to a complete file |
 | `barge-in.test.ts` | ledger arithmetic, tracker cut points, no audio after abort, interrupted turn recorded and rewritten, slow tool cancelled |
 | `voice-behaviour.test.ts` | speech-profile selection, speakable text, backchannel policy, VAD, filler timing |
 | `orchestrator.test.ts` | turn shape, prompt contents, tool turns, tool-failure recovery, per-user separation |
@@ -258,8 +270,8 @@ filter still cannot read across users.
 
 ## Verified against live services
 
-`npm run preflight` passes 5/5 and `npm run verify:rls` passes 14/14 against a real Supabase
-project. A full session has been driven end to end — Rime `coda` audio, Groq reasoning, real
+`npm run preflight` passes 5/5, `npm run verify:rls` passes 14/14 against a real Supabase project,
+and `npm run verify:audio` round-trips Rime speech through the app's WAV encoder into Whisper. A full session has been driven end to end — Rime `coda` audio, Groq reasoning, real
 tool calls — confirming: a filler spoken while a tool was still running, ingredients rescaled
 2→6 servings in the panel, a timer confirmation automatically taking the slower `precise`
 profile, and a barge-in that stopped audio in **11 ms** and left `heard_text` cut exactly where
@@ -267,6 +279,11 @@ playback stopped, with the reply acknowledging the correction rather than restar
 
 ## Known limitations
 
+- **Microphone capture itself has not been exercised end to end.** The upload format is verified by
+  `verify:audio`, the VAD policy and the ring buffer are unit-tested, and barge-in is verified
+  through the typed path, which calls the same code. But no real microphone has driven
+  capture → VAD → STT in this repository, so onset thresholds in a noisy kitchen are reasoned
+  about rather than measured.
 - **Echo cancellation is a hardware dependency.** The mic stays open while Rime speaks; on a device
   with poor AEC the assistant can hear itself and barge in on its own voice. Use a headset.
 - **Backchannels are timing-based, not semantic.** The policy is deliberately conservative

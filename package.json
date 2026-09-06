@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "preflight": "tsx scripts/preflight.ts",
     "seed": "tsx scripts/seed-demo.ts",
-    "verify:rls": "tsx scripts/verify-rls.ts"
+    "verify:rls": "tsx scripts/verify-rls.ts",
+    "verify:audio": "tsx scripts/verify-audio.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
