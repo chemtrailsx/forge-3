@@ -43,6 +43,67 @@ describe('tool surface', () => {
       expect(schema.parameters).toHaveProperty('type', 'object');
     }
   });
+
+  /**
+   * Providers validate tool arguments against this schema before the call ever
+   * reaches us, and a model that writes `"note": null` instead of omitting
+   * `note` is behaving normally. If the schema declares that property as a
+   * bare string, the provider answers 400 and the user loses the whole turn —
+   * which is exactly how `save_recipe` broke twice, first on `unit` and then
+   * on `note`.
+   *
+   * So the rule is not "fields we remembered to mark", it is every optional
+   * property, checked here at every depth.
+   */
+  it('lets every optional property be null, at every depth', () => {
+    const offenders: string[] = [];
+
+    const walk = (node: unknown, path: string): void => {
+      if (!node || typeof node !== 'object') return;
+      const schema = node as {
+        type?: unknown;
+        properties?: Record<string, unknown>;
+        required?: unknown;
+        items?: unknown;
+      };
+
+      if (schema.properties) {
+        const required = Array.isArray(schema.required) ? schema.required : [];
+        for (const [key, value] of Object.entries(schema.properties)) {
+          const child = value as { type?: unknown };
+          const types = Array.isArray(child.type) ? child.type : [child.type];
+          if (!required.includes(key) && !types.includes('null')) {
+            offenders.push(`${path}.${key} (${JSON.stringify(child.type)})`);
+          }
+          walk(value, `${path}.${key}`);
+        }
+      }
+      if (schema.items) walk(schema.items, `${path}[]`);
+    };
+
+    for (const tool of toolSchemas()) walk(tool.parameters, tool.name);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps an enum consistent with the null its type now permits', () => {
+    const save = toolSchemas().find((tool) => tool.name === 'save_user_preference');
+    const kind = (save?.parameters as { properties: { kind: { enum?: unknown[] } } }).properties.kind;
+    expect(kind.enum).toContain(null);
+    expect(kind.enum).toContain('avoidance');
+  });
+
+  it('asks for ingredients as spoken lines, not nested objects', () => {
+    const saveRecipe = toolSchemas().find((tool) => tool.name === 'save_recipe');
+    const ingredients = (
+      saveRecipe?.parameters as { properties: { ingredients: { items?: { type?: unknown } } } }
+    ).properties.ingredients;
+
+    // Nested objects are what the model got wrong repeatedly — dropped keys,
+    // rejected nulls, and eventually strings anyway. A flat list of lines is
+    // the shape it reliably produces, and parsing is deterministic.
+    expect(ingredients.items?.type).toContain('string');
+  });
 });
 
 describe('argument validation', () => {
@@ -58,6 +119,37 @@ describe('argument validation', () => {
     const { ctx } = await context();
     const outcome = await executeTool('start_timer', 'not json', ctx, signal);
     expect(outcome.ok).toBe(false);
+  });
+
+  it('reads an explicit null as "not provided" rather than failing', async () => {
+    const { ctx, tables } = await context();
+
+    // What a model actually emits when it fills in every key it was shown.
+    const outcome = await executeTool(
+      'save_recipe',
+      JSON.stringify({
+        title: 'Dictated Roast Chicken',
+        servings: 4,
+        ingredients: [
+          { name: 'whole chicken', quantity: 1.6, unit: 'kg', note: null },
+          { name: 'lemons', quantity: 2, unit: null, note: null },
+          { name: 'salt', quantity: null, unit: null, note: null },
+        ],
+        steps: ['Heat the oven to 200 degrees.', 'Roast for 75 minutes.'],
+      }),
+      ctx,
+      signal,
+    );
+
+    expect(outcome.ok).toBe(true);
+
+    const saved = tables.recipes?.find((row) => row.title === 'Dictated Roast Chicken');
+    expect(saved).toBeDefined();
+
+    const ingredients = saved?.ingredients as Array<{ name: string; quantity: number | null; unit: string | null }>;
+    // "2 lemons" keeps its count but has no unit; "salt" has neither.
+    expect(ingredients[1]).toMatchObject({ name: 'lemons', quantity: 2, unit: null });
+    expect(ingredients[2]).toMatchObject({ name: 'salt', quantity: null, unit: null });
   });
 
   it('reports an unknown tool without throwing', async () => {

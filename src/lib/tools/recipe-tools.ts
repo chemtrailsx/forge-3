@@ -211,17 +211,14 @@ export const saveRecipeTool = defineTool({
     {
       title: jsonSchema.string('Short recipe name.'),
       servings: jsonSchema.integer('How many people it serves.'),
+      // Plain lines, not nested objects. A model asked for structure here
+      // drops keys, sends nulls, or gives up and sends strings anyway; a
+      // deterministic parser turns "200 g spaghetti" into the same structure
+      // every time. See lib/cooking/parse-ingredient.ts.
       ingredients: jsonSchema.array(
-        jsonSchema(
-          {
-            name: jsonSchema.string('Ingredient name.'),
-            quantity: jsonSchema.number('Amount, or null if it is to taste.'),
-            unit: jsonSchema.string('Unit such as g, ml, tsp, cloves. Null if not applicable.'),
-            note: jsonSchema.string('Preparation note, such as "finely chopped".'),
-          },
-          ['name'],
-        ),
-        'The ingredient list.',
+        jsonSchema.string('One ingredient.'),
+        'One ingredient per entry, written the way it would be read aloud: '
+          + '"200 g spaghetti", "3 cloves garlic, thinly sliced", "salt".',
       ),
       steps: jsonSchema.array(jsonSchema.string('One instruction.'), 'The method, in order.'),
     },

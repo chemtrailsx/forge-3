@@ -178,6 +178,25 @@ saved preferences:
 npm run seed -- you@example.com
 ```
 
+### Adding your own recipes
+
+There is no recipe form — you dictate them, which is the point of the product:
+
+> "Save a new recipe called Lemon Herb Roast Chicken. It serves four. You need one whole chicken
+> about 1.6 kilos, two lemons, thirty grams of butter, four sprigs of thyme, three cloves of garlic,
+> salt and pepper. Steps: heat the oven to two hundred degrees. Rub the chicken with softened
+> butter..."
+
+It appears on the dashboard with a **Start cooking** button.
+
+The model is asked for ingredients as spoken lines — `"200 g spaghetti"` — rather than as nested
+JSON objects, and `lib/cooking/parse-ingredient.ts` turns those into structure. That split is
+deliberate: asking a small model to decompose a dictated paragraph into `{name, quantity, unit}`
+fails in three different ways (dropped keys, nulls the provider's validator rejects, and eventually
+strings anyway), while splitting `"thirty grams butter"` into its parts has one right answer and
+belongs in tested code. Quantities spoken as words are handled, because recognition returns what
+was said — and an ingredient parsed with no quantity is one the scaler silently skips.
+
 ---
 
 ## Demo script

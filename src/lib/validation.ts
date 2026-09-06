@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { coerceIngredient } from './cooking/parse-ingredient';
 import { ValidationError } from './errors';
 
 /**
@@ -17,7 +18,17 @@ export const ingredientSchema = z.object({
   note: z.string().trim().max(200).nullable().optional(),
 });
 
-export const ingredientsSchema = z.array(ingredientSchema).max(60);
+/**
+ * Ingredients may arrive as structured objects (from the API, or from a model
+ * that manages it) or as spoken lines like "200 g spaghetti". Both are parsed
+ * to the same shape, so nothing downstream has to care which arrived — see
+ * `lib/cooking/parse-ingredient.ts` for why the spoken form is the one the
+ * tool actually advertises.
+ */
+export const ingredientsSchema = z
+  .array(z.union([z.string().trim().min(1).max(200), ingredientSchema]))
+  .max(60)
+  .transform((entries) => entries.map(coerceIngredient));
 export const stepsSchema = z.array(z.string().trim().min(1).max(1000)).max(60);
 
 export const substitutionSchema = z.object({

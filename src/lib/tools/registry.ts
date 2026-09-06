@@ -91,7 +91,7 @@ export async function executeTool(
 
   try {
     const parsedJson: unknown = rawArguments.trim() ? JSON.parse(rawArguments) : {};
-    const parsed = tool.schema.safeParse(parsedJson);
+    const parsed = tool.schema.safeParse(stripNulls(parsedJson));
     if (!parsed.success) {
       return {
         name,
@@ -136,6 +136,31 @@ export async function executeTool(
       durationMs: Date.now() - startedAt,
     };
   }
+}
+
+/**
+ * Reads an explicit null as "not provided".
+ *
+ * The tool schemas permit null on every optional property, because models fill
+ * in keys they were shown rather than omitting them. On this side of that
+ * decision, `"unit": null` and a missing `unit` mean the same thing, and
+ * treating them the same lets each Zod schema's own default decide what absent
+ * becomes — `null` for a quantity that is genuinely "to taste", `''` for an
+ * empty search.
+ *
+ * Arrays are walked too, since a dictated recipe's nulls are inside its
+ * ingredient list rather than at the top level.
+ */
+function stripNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripNulls);
+  if (!value || typeof value !== 'object') return value;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (entry === null) continue;
+    out[key] = stripNulls(entry);
+  }
+  return out;
 }
 
 /**

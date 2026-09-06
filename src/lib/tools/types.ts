@@ -54,11 +54,48 @@ export function defineTool<TSchema extends z.ZodTypeAny>(
  * build the properties. A schema builder library would be a dependency for
  * twenty lines of literal.
  */
+/**
+ * Builds the object schema, and makes every optional property nullable.
+ *
+ * That last part is not a nicety. Providers validate tool arguments against
+ * this schema before the call reaches us, and a model filling in every key it
+ * was shown — writing `"note": null` rather than omitting `note` — is normal
+ * behaviour, not a malfunction. Declaring an optional property as a bare
+ * `string` therefore turns an ordinary completion into a provider-side 400
+ * that costs the user the whole turn.
+ *
+ * So optionality is expressed once, in `required`, and the nullability that
+ * implies is derived rather than remembered. `executeTool` completes the pair
+ * by reading a null back as "not provided", so Zod's defaults still apply.
+ */
 function objectSchema(
   properties: Record<string, unknown>,
   required: string[] = [],
 ): Record<string, unknown> {
-  return { type: 'object', properties, required, additionalProperties: false };
+  const relaxed: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(properties)) {
+    if (required.includes(key) || !value || typeof value !== 'object') {
+      relaxed[key] = value;
+      continue;
+    }
+
+    const property = { ...(value as Record<string, unknown>) };
+    const type = property.type;
+
+    if (typeof type === 'string' && type !== 'null') {
+      property.type = [type, 'null'];
+      // An enum has to admit null too, or the type and the enum disagree and
+      // the validator rejects what the type just permitted.
+      if (Array.isArray(property.enum) && !property.enum.includes(null)) {
+        property.enum = [...property.enum, null];
+      }
+    }
+
+    relaxed[key] = property;
+  }
+
+  return { type: 'object', properties: relaxed, required, additionalProperties: false };
 }
 
 export const jsonSchema = Object.assign(objectSchema, {
@@ -73,5 +110,21 @@ export const jsonSchema = Object.assign(objectSchema, {
   },
   array(items: Record<string, unknown>, description: string): Record<string, unknown> {
     return { type: 'array', items, description };
+  },
+  /**
+   * A field the model may legitimately send as null.
+   *
+   * This has to be declared in the type, not just described in prose.
+   * Providers validate tool arguments against this schema before the call ever
+   * reaches us, so a description saying "null if not applicable" against a
+   * bare `string` type is a contradiction the model obeys and the validator
+   * then rejects — the whole turn fails, and the failure is the schema's
+   * fault rather than the model's.
+   */
+  nullable(
+    type: 'string' | 'number' | 'integer',
+    description: string,
+  ): Record<string, unknown> {
+    return { type: [type, 'null'], description };
   },
 });
