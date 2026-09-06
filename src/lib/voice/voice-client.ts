@@ -78,7 +78,7 @@ export class VoiceClient {
     this.player = new PcmPlayer(sampleRate, {
       onPlayingChange: (playing) => {
         this.assistantSpeaking = playing;
-        if (!playing && this.status === 'speaking') this.setStatus('listening');
+        if (!playing && this.status === 'speaking') this.setResting();
         else if (playing) this.setStatus('speaking');
       },
     });
@@ -116,6 +116,18 @@ export class VoiceClient {
     if (this.status === status) return;
     this.status = status;
     this.events.onStatus(status);
+  }
+
+  /**
+   * Return to rest after a turn.
+   *
+   * "Listening" is a claim about the microphone, not about the app being idle.
+   * A typed turn can run with the mic closed — or after it was denied — and
+   * showing "Listening" there tells a cook whose hands are covered in flour
+   * that they can just talk, when nothing is in fact hearing them.
+   */
+  private setResting(): void {
+    this.setStatus(this.running ? 'listening' : 'idle');
   }
 
   private async openMicrophone(): Promise<void> {
@@ -244,18 +256,18 @@ export class VoiceClient {
       const response = await fetch('/api/stt', { method: 'POST', body: form });
       if (!response.ok) {
         this.events.onError(await errorMessage(response));
-        this.setStatus('listening');
+        this.setResting();
         return;
       }
       transcript = ((await response.json()) as { text?: string }).text?.trim() ?? '';
     } catch {
       this.events.onError('Could not reach speech recognition.');
-      this.setStatus('listening');
+      this.setResting();
       return;
     }
 
     if (!transcript) {
-      this.setStatus('listening');
+      this.setResting();
       return;
     }
 
@@ -286,7 +298,7 @@ export class VoiceClient {
 
       if (!response.ok || !response.body) {
         this.events.onError(await errorMessage(response));
-        this.setStatus('listening');
+        this.setResting();
         return;
       }
 
@@ -317,7 +329,7 @@ export class VoiceClient {
       }
     } finally {
       if (this.turnController === controller) this.turnController = null;
-      if (!this.assistantSpeaking) this.setStatus('listening');
+      if (!this.assistantSpeaking) this.setResting();
     }
   }
 

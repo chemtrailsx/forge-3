@@ -261,6 +261,69 @@ describe('voice fillers during tool calls', () => {
     expect(events.some((event) => event.type === 'filler')).toBe(false);
   });
 
+  it('never leaves a filler followed by silence when the model returns nothing', async () => {
+    process.env.TOOL_DELAY_MS = '0';
+    const { db } = makeDb(ALICE, seedTables());
+    const tts = new FakeTts();
+
+    // Empty stream, and an empty retry after it — the worst case.
+    const llm = new FakeLlm(
+      [
+        { content: '', toolCalls: [toolCall('search_user_recipes', { query: 'pasta' })] },
+        { content: '' },
+      ],
+      '',
+    );
+
+    const events = await collect(
+      runTurn({
+        db,
+        sessionId: ALICE_SESSION,
+        utterance: 'what have I got saved?',
+        signal: new AbortController().signal,
+        llm,
+        tts,
+      }),
+    );
+
+    // It retried the completion rather than giving up on the first empty reply.
+    expect(llm.completeCalls.length).toBe(2);
+
+    const end = events.find((event) => event.type === 'turn.end');
+    const text = end?.type === 'turn.end' ? end.text : '';
+    expect(text).toMatch(/sorry/i);
+    // Something was actually spoken, so the turn does not end in dead air.
+    expect(tts.spoken.length).toBeGreaterThan(0);
+    expect(events.some((event) => event.type === 'audio')).toBe(true);
+  });
+
+  it('uses a retried answer when the stream came back empty', async () => {
+    process.env.TOOL_DELAY_MS = '0';
+    const { db } = makeDb(ALICE, seedTables());
+
+    const llm = new FakeLlm(
+      [
+        { content: '', toolCalls: [toolCall('search_user_recipes', { query: 'pasta' })] },
+        { content: 'You have one pasta recipe saved.' },
+      ],
+      '',
+    );
+
+    const events = await collect(
+      runTurn({
+        db,
+        sessionId: ALICE_SESSION,
+        utterance: 'what have I got saved?',
+        signal: new AbortController().signal,
+        llm,
+        tts: new FakeTts(),
+      }),
+    );
+
+    const end = events.find((event) => event.type === 'turn.end');
+    expect(end?.type === 'turn.end' ? end.text : '').toBe('You have one pasta recipe saved.');
+  });
+
   it('speaks the real answer with the precise profile once the tool returns', async () => {
     process.env.TOOL_DELAY_MS = '0';
     const { db } = makeDb(ALICE, seedTables());

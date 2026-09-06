@@ -58,6 +58,14 @@ export type RunTurnInput = {
  */
 const FILLER_THRESHOLD_MS = 250;
 
+/**
+ * Spoken when the model returns nothing at all after a tool ran. It admits the
+ * failure instead of inventing a result — the tool may well have succeeded,
+ * but this turn has no answer to report, and guessing one is worse than saying
+ * so to someone who cannot see a screen.
+ */
+const EMPTY_ANSWER_FALLBACK = 'Sorry, I lost that one. Could you ask me again?';
+
 export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
   const startedAt = Date.now();
   const { db, sessionId, signal } = input;
@@ -157,11 +165,25 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
 
       // Streamed, so the first clause can be spoken while the rest is written.
       const streamStart = Date.now();
-      const spoken = yield* speakStream(llm.stream(followUp, signal), tts, signal, () => {
+      const noteAudio = () => {
         if (firstAudioAt === null) firstAudioAt = Date.now();
-      });
+      };
+      const spoken = yield* speakStream(llm.stream(followUp, signal), tts, signal, noteAudio);
       llmMs += Date.now() - streamStart;
       assistantText = spoken;
+
+      // Some models occasionally return an empty message after a tool call.
+      // The user has already heard a filler by this point, so returning
+      // nothing leaves them with "let me check that..." followed by silence —
+      // the exact dead air the filler exists to prevent. Retry once without
+      // streaming, and if that is empty too, say so rather than going quiet.
+      if (!assistantText.trim() && !signal.aborted) {
+        const retryStart = Date.now();
+        const retry = await llm.complete(followUp, [], signal);
+        llmMs += Date.now() - retryStart;
+        assistantText = retry.content.trim() || EMPTY_ANSWER_FALLBACK;
+        yield* speakText(assistantText, tts, signal, noteAudio);
+      }
     }
 
     // The no-tool path already has its full text; speak it in clauses.

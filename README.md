@@ -145,7 +145,7 @@ Every provider below has a free tier. Nothing here needs a card.
 | Variable | Where to get it | Notes |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API | Safe in the browser *because* RLS is on |
-| `SUPABASE_SERVICE_ROLE_KEY` | same page | Server only. Used by `npm run seed` and nothing else |
+| `SUPABASE_SERVICE_ROLE_KEY` | same page | Server only. Used by `npm run seed` and `npm run verify:rls`, never by the app |
 | `RIME_API_KEY` | [rime.ai](https://rime.ai) | Server only |
 | `LLM_API_KEY` | [console.groq.com](https://console.groq.com) | Default model `openai/gpt-oss-120b` (free tier, supports tool calling) |
 | `STT_API_KEY` | same Groq key works | Default model `whisper-large-v3-turbo` |
@@ -221,13 +221,25 @@ Set `TOOL_DELAY_MS=3000` in `.env.local` first, so the filler has a gap to cover
 ## Testing
 
 ```bash
-npm test          # vitest
+npm test          # vitest — no network or API keys needed
 npm run typecheck # tsc --noEmit
 npm run lint      # eslint
 npm run build     # next build
+
+npm run preflight   # exercises every provider against its live API
+npm run verify:rls  # proves user isolation against the real database
 ```
 
-99 tests across seven files. They run without network access or API keys: the orchestrator is an
+`verify:rls` is the one that matters for the security claim. It creates two
+throwaway users, signs in as each for real JWTs, then attacks the database with
+one user's token while reaching for the other's rows — reads, forged inserts,
+updates, deletes, and a cross-user foreign key. Every request goes through
+PostgREST exactly as a browser's would, so what it tests is the deployed policy
+set rather than a model of it. Both users are deleted afterwards, including on
+failure. Needs `SUPABASE_SERVICE_ROLE_KEY` for setup and teardown only; the
+assertions themselves all run as ordinary users.
+
+102 tests across seven files. They run without network access or API keys: the orchestrator is an
 async generator, so tests drive real turns with injected fake providers, and the database is an
 in-memory PostgREST double that **also simulates RLS** — a test that forgets the application-level
 filter still cannot read across users.
@@ -243,6 +255,15 @@ filter still cannot read across users.
 | `orchestrator.test.ts` | turn shape, prompt contents, tool turns, tool-failure recovery, per-user separation |
 
 ---
+
+## Verified against live services
+
+`npm run preflight` passes 5/5 and `npm run verify:rls` passes 14/14 against a real Supabase
+project. A full session has been driven end to end — Rime `coda` audio, Groq reasoning, real
+tool calls — confirming: a filler spoken while a tool was still running, ingredients rescaled
+2→6 servings in the panel, a timer confirmation automatically taking the slower `precise`
+profile, and a barge-in that stopped audio in **11 ms** and left `heard_text` cut exactly where
+playback stopped, with the reply acknowledging the correction rather than restarting.
 
 ## Known limitations
 
