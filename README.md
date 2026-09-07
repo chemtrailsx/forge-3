@@ -252,6 +252,9 @@ Set `TOOL_DELAY_MS=3000` in `.env.local` first, so the filler has a gap to cover
 - **Two independent checks.** Every query filters on `user_id` *and* runs against forced RLS, so a
   mistake in either layer is not enough to leak a row. Both are tested — see
   `tests/data-isolation.test.ts`.
+- **The browser never holds a Supabase token.** Sign-in goes through a server action, and every
+  query runs from the server against the user's session cookie — there is no browser Supabase
+  client at all.
 - **Secrets stay server-side.** Rime, LLM and STT keys are read only inside route handlers and
   scripts. The service-role key is behind a `server-only` import, so an accidental client import is
   a build error rather than a leak.
