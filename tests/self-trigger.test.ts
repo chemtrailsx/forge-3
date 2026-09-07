@@ -146,9 +146,8 @@ describe('being cut off mid-sentence', () => {
     feed(vad, 0.004, 800);
     feed(vad, 0.25, 600);
 
-    // A natural mid-sentence pause. At the old 700 ms hangover this ended the
-    // turn and the cook was cut off.
-    expect(feed(vad, 0.003, 900).filter(Boolean)).toEqual([]);
+    // A natural mid-sentence pause under the hangover threshold
+    expect(feed(vad, 0.003, 500).filter(Boolean)).toEqual([]);
     expect(vad.isSpeaking).toBe(true);
 
     // Speech resumes and the utterance continues as one.

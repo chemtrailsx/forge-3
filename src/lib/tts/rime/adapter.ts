@@ -102,12 +102,28 @@ export class RimeAdapter implements TtsProvider {
       fn?.();
     };
 
+    let audioBuffer: Buffer[] = [];
+    let audioBytes = 0;
+    const minChunkBytes = Math.round(this.config.samplingRate * 2 * 0.1); // ~100 ms
+
+    const flushAudio = () => {
+      if (audioBuffer.length === 0) return;
+      const merged = Buffer.concat(audioBuffer);
+      audioBuffer = [];
+      audioBytes = 0;
+      queue.push({ type: 'audio', contextId: request.contextId, seq: seq++, pcm: merged });
+      wake();
+    };
+
     // Every handler filters on contextId. A chunk belonging to a superseded
     // turn is dropped here and can never reach the browser.
     const onAudio = (chunk: Ws3AudioChunk) => {
       if (chunk.contextId !== request.contextId) return;
-      queue.push({ type: 'audio', contextId: request.contextId, seq: seq++, pcm: chunk.pcm });
-      wake();
+      audioBuffer.push(chunk.pcm);
+      audioBytes += chunk.pcm.length;
+      if (audioBytes >= minChunkBytes) {
+        flushAudio();
+      }
     };
     const onTimestamps = (stamps: Ws3Timestamps) => {
       if (stamps.contextId !== request.contextId) return;
@@ -122,6 +138,7 @@ export class RimeAdapter implements TtsProvider {
     };
     const onDone = (contextId: string | null) => {
       if (contextId !== request.contextId) return;
+      flushAudio();
       finished = true;
       wake();
     };
@@ -157,6 +174,12 @@ export class RimeAdapter implements TtsProvider {
         await new Promise<void>((resolve) => {
           notify = resolve;
         });
+      }
+
+      flushAudio();
+      while (queue.length > 0) {
+        const event = queue.shift();
+        if (event) yield event;
       }
 
       if (!signal.aborted && !failure) {

@@ -55,7 +55,7 @@ const VAD_WINDOW_MS = 20;
  * finished is fine to hear about a few seconds later — and it keeps the poll
  * cheap enough to run for a whole session.
  */
-const NUDGE_POLL_MS = 5000;
+const NUDGE_POLL_MS = 15000;
 
 /**
  * How long after the speaker falls silent the assistant still counts as
@@ -112,8 +112,13 @@ export class VoiceClient {
       onPlayingChange: (playing) => {
         this.assistantSpeaking = playing;
         if (!playing) this.lastDrainedAt = performance.now();
-        if (!playing && this.status === 'speaking') this.setResting();
-        else if (playing) this.setStatus('speaking');
+        if (!playing && this.status === 'speaking') {
+          if (!this.turnController) {
+            this.setResting();
+          }
+        } else if (playing) {
+          this.setStatus('speaking');
+        }
       },
     });
   }

@@ -3,76 +3,94 @@
 import { useEffect, useState } from 'react';
 import type { TimerView } from '@/lib/types';
 
-/**
- * Timers count down locally from `startedAt + durationMs`, which the server
- * sent. Ticking a local counter would drift; recomputing from the absolute end
- * time each second cannot.
- *
- * One list, not two. Whether the assistant started the countdown or the cook
- * asked for it, the answer to "what is happening right now that I am not
- * watching" is the same — and seeing it is what makes the automatic reminder
- * feel expected rather than startling.
- */
 export function TimerPanel({ timers }: { timers: TimerView[] }) {
-  /**
-   * The clock is read in an effect, never during render.
-   *
-   * Reading `Date.now()` while rendering is impure — the same props produce a
-   * different tree each call — and it is a hydration hazard besides: the
-   * server renders one instant and the browser another, so the first paint
-   * disagrees with the markup it is replacing. Holding "now" in state makes
-   * every row a pure function of its props and gives all of them the same
-   * instant to count from.
-   */
   const [now, setNow] = useState<number | null>(null);
   const total = timers.length;
 
   useEffect(() => {
     if (total === 0) return;
-    // Only subscribe. Seeding the value synchronously here would be a
-    // cascading render for no gain: until the first tick, each row falls back
-    // to the remaining time the server already computed, which is at most half
-    // a second stale.
     const id = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(id);
   }, [total]);
 
   if (total === 0) {
     return (
-      <section className="card">
-        <h3>On the go</h3>
-        <p className="muted small" style={{ margin: 0 }}>
-          Nothing cooking. Say &ldquo;set a timer for eight minutes&rdquo; any time.
+      <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 12,
+            color: 'var(--accent-primary)',
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </div>
+        <p className="small" style={{ margin: 0, fontWeight: 600, color: 'var(--text-primary)' }}>
+          No active timers
         </p>
-      </section>
+        <p className="muted small" style={{ marginTop: 4, marginBottom: 0 }}>
+          Say &ldquo;set a timer for eight minutes&rdquo; at any time while cooking.
+        </p>
+      </div>
     );
   }
 
   return (
-    <section className="card">
-      <h3>On the go</h3>
+    <div>
+      <div className="spread" style={{ marginBottom: 14 }}>
+        <div>
+          <div className="section-label">Kitchen Timers</div>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', textTransform: 'none' }}>
+            Active Timers
+          </h3>
+        </div>
+        <span className="badge on">
+          {timers.length} {timers.length === 1 ? 'timer' : 'timers'}
+        </span>
+      </div>
       <ul className="plain">
         {timers.map((timer) => (
           <TimerRow key={timer.id} timer={timer} now={now} />
         ))}
       </ul>
-    </section>
+    </div>
   );
 }
 
 function TimerRow({ timer, now }: { timer: TimerView; now: number | null }) {
   const endsAt = new Date(timer.startedAt).getTime() + timer.durationMs;
-
-  // `now` is null for the single frame before the first effect runs. Falling
-  // back to the value the server already computed keeps that frame correct
-  // rather than blank or briefly wrong.
   const remaining = now === null ? timer.remainingMs : Math.max(0, endsAt - now);
 
   return (
-    <li>
-      <span>{timer.label}</span>
-      <span className={`timer${remaining === 0 ? ' expired' : ''}`}>
-        {remaining === 0 ? 'ready' : formatRemaining(remaining)}
+    <li className={`timer-card${remaining > 0 ? ' running' : ''}`}>
+      <div className="row" style={{ gap: 10 }}>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={remaining === 0 ? 'var(--danger-color)' : 'var(--accent-primary)'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        <span style={{ fontWeight: 600 }}>{timer.label}</span>
+      </div>
+      <span className={`timer-digits${remaining === 0 ? ' expired' : ''}`}>
+        {remaining === 0 ? 'Ready' : formatRemaining(remaining)}
       </span>
     </li>
   );

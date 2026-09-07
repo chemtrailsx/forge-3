@@ -21,9 +21,6 @@ export default async function CookPage({
   const { sessionId } = await params;
   if (!uuidSchema.safeParse(sessionId).success) notFound();
 
-  // Loading through the same path the voice loop uses means a session
-  // belonging to somebody else is a 404 here for exactly the same reason it is
-  // unreachable there.
   let snapshot;
   try {
     snapshot = (await loadCookingState(dbFor(ctx), sessionId)).snapshot;
@@ -35,11 +32,23 @@ export default async function CookPage({
   const providers = providerDescriptors();
 
   return (
-    <main className="page">
+    <main className="page fullscreen">
       <TopBar email={ctx.email} current="cook" />
-      <h1 style={{ marginBottom: 18 }}>
-        {snapshot.awaitingRecipe ? 'Ready when you are' : snapshot.title}
-      </h1>
+      
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, padding: '0 8px' }}>
+        <div>
+          <div className="section-label">Active Culinary Session</div>
+          <h1 style={{ margin: 0, fontSize: '1.75rem', letterSpacing: '-0.02em' }}>
+            {snapshot.awaitingRecipe ? 'Ready when you are' : snapshot.title}
+          </h1>
+        </div>
+        {!snapshot.awaitingRecipe ? (
+          <span className="badge servings" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
+            {snapshot.servings} servings
+          </span>
+        ) : null}
+      </div>
+
       <VoiceConsole
         sessionId={sessionId}
         initialState={snapshot}

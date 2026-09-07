@@ -28,6 +28,8 @@ export class PcmPlayer {
     return this.context;
   }
 
+  private drainTimer: number | null = null;
+
   async init(): Promise<void> {
     if (this.context) return;
 
@@ -37,12 +39,8 @@ export class PcmPlayer {
     const node = new AudioWorkletNode(context, 'pcm-player', {
       outputChannelCount: [1],
       processorOptions: {
-        // ~180 ms of cushion before the first syllable. Chunks arrive over the
-        // network without pacing themselves to the speaker, and playing the
-        // moment the first one lands means every late chunk is a hole in the
-        // middle of a word. The delay is barely perceptible; the stutter it
-        // prevents is not.
-        minBufferSamples: Math.round(this.sampleRate * 0.18),
+        // ~60 ms of cushion before the first syllable for crisp, low-latency start.
+        minBufferSamples: Math.round(this.sampleRate * 0.06),
       },
     });
     const gain = context.createGain();
@@ -54,13 +52,26 @@ export class PcmPlayer {
         | { type: 'playing' | 'drained' | 'cleared' }
         | { type: 'played'; total: number; byContext: Record<string, number> };
 
-      if (message.type === 'playing') this.events.onPlayingChange?.(true);
-      else if (message.type === 'drained' || message.type === 'cleared') {
-        if (message.type === 'cleared') {
-          const resolve = this.pendingClear;
-          this.pendingClear = null;
-          resolve?.();
+      if (message.type === 'playing') {
+        if (this.drainTimer !== null) {
+          clearTimeout(this.drainTimer);
+          this.drainTimer = null;
         }
+        this.events.onPlayingChange?.(true);
+      } else if (message.type === 'drained') {
+        if (this.drainTimer !== null) clearTimeout(this.drainTimer);
+        this.drainTimer = window.setTimeout(() => {
+          this.drainTimer = null;
+          this.events.onPlayingChange?.(false);
+        }, 150);
+      } else if (message.type === 'cleared') {
+        if (this.drainTimer !== null) {
+          clearTimeout(this.drainTimer);
+          this.drainTimer = null;
+        }
+        const resolve = this.pendingClear;
+        this.pendingClear = null;
+        resolve?.();
         this.events.onPlayingChange?.(false);
       } else if (message.type === 'played') {
         this.lastProgress = message.byContext;

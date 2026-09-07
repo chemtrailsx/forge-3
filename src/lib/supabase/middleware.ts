@@ -70,21 +70,19 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     },
   );
 
+  const { pathname } = request.nextUrl;
+
+  // Route handlers perform their own authentication via requireUser().
+  // Skipping the duplicate remote auth round-trip in middleware cuts 1-2s of latency.
+  if (pathname.startsWith('/api/')) {
+    return response;
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-
   if (!user && !isPublic(pathname)) {
-    // API callers get a JSON 401; the mic loop must not try to parse a login
-    // page as an event stream.
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { error: { code: 'unauthorized', message: 'You must be signed in.' } },
-        { status: 401 },
-      );
-    }
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);

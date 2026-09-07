@@ -3,52 +3,74 @@
 import type { CookingStateSnapshot } from '@/lib/types';
 
 export function StepPanel({ state }: { state: CookingStateSnapshot }) {
-  // Before a dish is chosen the screen has one job: make it obvious you can
-  // just say what you want. Showing "Step 1 of 1" of an empty recipe would be
-  // both wrong and discouraging.
   if (state.awaitingRecipe) {
     return (
-      <section className="card">
-        <h3 style={{ margin: 0 }}>Nothing on the go</h3>
-        <p className="step" style={{ marginBottom: 8 }}>
-          Say what you feel like making.
+      <div className="step-container">
+        <div className="spread" style={{ marginBottom: 12 }}>
+          <span className="badge on">Ready to Cook</span>
+        </div>
+        <h2 className="step-instruction" style={{ marginBottom: 8, fontSize: '1.5rem' }}>
+          What are you making today?
+        </h2>
+        <p className="muted" style={{ margin: 0, fontSize: '0.92rem', lineHeight: 1.6 }}>
+          Say what you feel like cooking &mdash; e.g. &ldquo;I want to make white sauce pasta for two&rdquo; or mention whatever ingredients you have in your kitchen.
         </p>
-        <p className="muted small" style={{ margin: 0 }}>
-          &ldquo;I want to make pasta for three.&rdquo; &nbsp;·&nbsp; &ldquo;Something with chicken
-          and rice.&rdquo; Mention anything you&rsquo;re out of and it will work around it.
-        </p>
-      </section>
+      </div>
     );
   }
 
+  const currentStepNum = Math.min(state.currentStep + 1, Math.max(state.totalSteps, 1));
+  const totalStepsNum = state.totalSteps || 1;
+  const progressPercent = Math.round((currentStepNum / totalStepsNum) * 100);
   const passive = state.currentStepDetail?.attention === 'passive';
 
   return (
-    <section className="card">
+    <div className="step-container">
       <div className="spread">
-        <h3 style={{ margin: 0 }}>
-          Step {Math.min(state.currentStep + 1, Math.max(state.totalSteps, 1))} of{' '}
-          {state.totalSteps || 1}
-        </h3>
-        <span className="badge">
-          {state.servings} {state.servings === 1 ? 'serving' : 'servings'}
-          {state.servings !== state.baseServings ? ` (recipe: ${state.baseServings})` : ''}
-        </span>
+        <div>
+          <div className="section-label">Active Step</div>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', textTransform: 'none' }}>
+            Step {currentStepNum} of {totalStepsNum}
+          </h3>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          {passive ? (
+            <span className="badge" style={{ borderColor: '#D8CCE8', background: '#F5EEFD', color: '#7C4DFF' }}>
+              Timed Step
+            </span>
+          ) : null}
+          <span className="badge servings">
+            {state.servings} {state.servings === 1 ? 'serving' : 'servings'}
+            {state.servings !== state.baseServings ? ` (base: ${state.baseServings})` : ''}
+          </span>
+        </div>
       </div>
 
-      <p className="step">{state.currentStepText ?? 'No steps recorded for this recipe.'}</p>
+      <div className="step-progress-track">
+        <div className="step-progress-indicator" style={{ width: `${progressPercent}%` }} />
+      </div>
+
+      <div className="step-instruction">
+        {state.currentStepText ?? 'No steps recorded for this recipe.'}
+      </div>
 
       {passive ? (
-        <p className="muted small" style={{ marginTop: -4 }}>
-          This one runs by itself — you&rsquo;ll be told when it&rsquo;s ready.
+        <p className="small" style={{ marginBottom: 14, color: '#7C4DFF', fontWeight: 500 }}>
+          This step runs by itself &mdash; your assistant will notify you when it finishes.
         </p>
       ) : null}
 
       {state.nextStepText ? (
-        <p className="muted small">Next: {state.nextStepText}</p>
+        <div className="next-step-badge">
+          <strong>Next</strong>
+          <span>{state.nextStepText}</span>
+        </div>
       ) : (
-        <p className="muted small">This is the last step.</p>
+        <div className="next-step-badge">
+          <strong>Done</strong>
+          <span>This is the final step of the recipe. Enjoy!</span>
+        </div>
       )}
-    </section>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { llmEnv, type LlmEnv } from '../env';
+import { geminiEnv, groqEnv, llmEnv, type LlmEnv } from '../env';
 import { ProviderError } from '../errors';
 import type { ChatMessage, ChatResult, LlmProvider, ToolCall, ToolSchema } from './types';
 
@@ -72,33 +72,36 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     return this.config.model;
   }
 
-  private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
+  private async post(body: Record<string, unknown>, signal: AbortSignal, retryModel?: string): Promise<Response> {
+    const modelToUse = retryModel || this.config.model;
     const response = await fetch(`${this.config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: this.config.model, ...body }),
+      body: JSON.stringify({ model: modelToUse, ...body }),
       signal,
     });
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
 
-      // A tool call the model failed to write as valid JSON. This is a
-      // sampling failure, not a request that will never work: the same prompt
-      // usually succeeds on a second attempt, and the alternative is losing
-      // the user's entire turn to a truncated brace.
       if (response.status === 400 && MALFORMED_TOOL_CALL.test(detail)) {
         throw new MalformedToolCallError(detail.slice(0, 200));
       }
 
-      // Rate limits are the common failure on a free tier, and the difference
-      // matters to the caller: retry later vs. fix your key.
+      // If rate limited on current model and we haven't tried alternate model yet, try qwen/qwen3.6-27b or gpt-oss-20b
+      if (response.status === 429 && !retryModel && this.config.baseUrl.includes('groq.com')) {
+        const altModel = modelToUse === 'qwen/qwen3.6-27b' ? 'openai/gpt-oss-20b' : 'qwen/qwen3.6-27b';
+        console.warn(`[llm] Rate limited on ${modelToUse}, retrying on alternate free model ${altModel}...`);
+        await new Promise((r) => setTimeout(r, 200));
+        return this.post(body, signal, altModel);
+      }
+
       const message =
         response.status === 429
-          ? 'The language model is rate limited right now.'
+          ? 'The language model is rate limited right now. Please wait a moment.'
           : `Language model request failed (${response.status}). ${detail.slice(0, 200)}`;
       throw new ProviderError('llm', message);
     }
@@ -215,6 +218,69 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   }
 }
 
+export class FallbackLlmProvider implements LlmProvider {
+  constructor(
+    private readonly primary: LlmProvider,
+    private readonly fallback: LlmProvider,
+  ) {}
+
+  get model(): string {
+    return `${this.primary.model} (fallback: ${this.fallback.model})`;
+  }
+
+  async complete(
+    messages: ChatMessage[],
+    tools: ToolSchema[],
+    signal: AbortSignal,
+  ): Promise<ChatResult> {
+    try {
+      return await this.primary.complete(messages, tools, signal);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      console.warn('[llm] Primary LLM provider failed, falling back to backup provider:', error);
+      return await this.fallback.complete(messages, tools, signal);
+    }
+  }
+
+  async *stream(messages: ChatMessage[], signal: AbortSignal): AsyncIterable<string> {
+    try {
+      let yieldedAny = false;
+      for await (const delta of this.primary.stream(messages, signal)) {
+        yieldedAny = true;
+        yield delta;
+      }
+      if (!yieldedAny && !signal.aborted) {
+        for await (const delta of this.fallback.stream(messages, signal)) {
+          yield delta;
+        }
+      }
+    } catch (error) {
+      if (signal.aborted) return;
+      console.warn('[llm] Primary LLM stream failed, falling back to backup provider:', error);
+      for await (const delta of this.fallback.stream(messages, signal)) {
+        yield delta;
+      }
+    }
+  }
+}
+
 export function getLlmProvider(): LlmProvider {
+  const gemini = geminiEnv();
+  const groq = groqEnv();
+
+  if (gemini && groq) {
+    const primary = new OpenAiCompatibleProvider(gemini);
+    const fallback = new OpenAiCompatibleProvider(groq);
+    return new FallbackLlmProvider(primary, fallback);
+  }
+
+  if (gemini) {
+    return new OpenAiCompatibleProvider(gemini);
+  }
+
+  if (groq) {
+    return new OpenAiCompatibleProvider(groq);
+  }
+
   return new OpenAiCompatibleProvider(llmEnv());
 }

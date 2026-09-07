@@ -73,18 +73,72 @@ export function rimeEnv(): RimeEnv {
 
 const llmSchema = z.object({
   apiKey: nonEmpty,
-  model: nonEmpty.default('openai/gpt-oss-120b'),
+  model: nonEmpty.default('openai/gpt-oss-20b'),
   baseUrl: nonEmpty.url().default('https://api.groq.com/openai/v1'),
 });
 
 export type LlmEnv = z.infer<typeof llmSchema>;
 
 export function llmEnv(): LlmEnv {
+  const apiKey =
+    process.env.LLM_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    '';
+
+  const baseUrl =
+    process.env.LLM_BASE_URL ||
+    (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || apiKey.startsWith('AIza')
+      ? 'https://generativelanguage.googleapis.com/v1beta/openai/'
+      : 'https://api.groq.com/openai/v1');
+
+  const isGemini = baseUrl.includes('googleapis.com') || apiKey.startsWith('AIza');
+  const isGroq = baseUrl.includes('groq.com') || apiKey.startsWith('gsk_');
+
+  const defaultModel = isGemini
+    ? 'gemini-2.5-flash'
+    : isGroq
+      ? 'openai/gpt-oss-20b'
+      : 'gpt-4o-mini';
+
+  const model = process.env.LLM_MODEL || process.env.GEMINI_MODEL || process.env.GROQ_MODEL || defaultModel;
+
   return llmSchema.parse({
-    apiKey: process.env.LLM_API_KEY,
-    model: process.env.LLM_MODEL || undefined,
-    baseUrl: process.env.LLM_BASE_URL || undefined,
+    apiKey,
+    model,
+    baseUrl,
   });
+}
+
+export function geminiEnv(): LlmEnv | null {
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    (process.env.LLM_BASE_URL?.includes('googleapis.com') ? process.env.LLM_API_KEY : undefined) ||
+    (process.env.LLM_API_KEY?.startsWith('AIza') ? process.env.LLM_API_KEY : undefined);
+
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    model: process.env.GEMINI_MODEL || (process.env.LLM_MODEL?.startsWith('gemini') ? process.env.LLM_MODEL : 'gemini-2.5-flash'),
+    baseUrl: process.env.GEMINI_BASE_URL || (process.env.LLM_BASE_URL?.includes('googleapis.com') ? process.env.LLM_BASE_URL : 'https://generativelanguage.googleapis.com/v1beta/openai/'),
+  };
+}
+
+export function groqEnv(): LlmEnv | null {
+  const apiKey =
+    process.env.GROQ_API_KEY ||
+    process.env.FALLBACK_LLM_API_KEY ||
+    (process.env.LLM_BASE_URL?.includes('groq.com') ? process.env.LLM_API_KEY : undefined) ||
+    (process.env.LLM_API_KEY?.startsWith('gsk_') ? process.env.LLM_API_KEY : undefined);
+
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    model: process.env.GROQ_MODEL || (process.env.LLM_MODEL?.includes('gpt-oss') ? process.env.LLM_MODEL : 'openai/gpt-oss-20b'),
+    baseUrl: process.env.GROQ_BASE_URL || (process.env.LLM_BASE_URL?.includes('groq.com') ? process.env.LLM_BASE_URL : 'https://api.groq.com/openai/v1'),
+  };
 }
 
 const sttSchema = z.object({
@@ -96,8 +150,14 @@ const sttSchema = z.object({
 export type SttEnv = z.infer<typeof sttSchema>;
 
 export function sttEnv(): SttEnv {
+  const apiKey =
+    process.env.STT_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    process.env.FALLBACK_LLM_API_KEY ||
+    (process.env.LLM_API_KEY?.startsWith('gsk_') ? process.env.LLM_API_KEY : process.env.LLM_API_KEY);
+
   return sttSchema.parse({
-    apiKey: process.env.STT_API_KEY,
+    apiKey,
     model: process.env.STT_MODEL || undefined,
     endpoint: process.env.STT_ENDPOINT || undefined,
   });
