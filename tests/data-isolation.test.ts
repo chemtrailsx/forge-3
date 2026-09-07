@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getRecipe, listRecipes, searchRecipes, deleteRecipe, createRecipe } from '@/lib/db/recipes';
@@ -124,6 +124,66 @@ describe('middleware placement', () => {
     expect(existsSync(resolve(root, 'src/app'))).toBe(true);
     expect(existsSync(resolve(root, 'src/middleware.ts'))).toBe(true);
     expect(existsSync(resolve(root, 'middleware.ts'))).toBe(false);
+  });
+
+  /**
+   * The middleware deliberately does not run on `/api`, because it was making
+   * every API call verify the same session twice — once there and once in the
+   * route — which put an entire round trip to the auth server in front of
+   * every spoken reply.
+   *
+   * That is only safe while the second check is unconditional. This asserts
+   * it: a route handler that forgets `requireUser` is now genuinely open, not
+   * merely redundant, and this test is the thing that notices.
+   */
+  it('leaves no API route relying on a gate that no longer runs', () => {
+    const apiRoot = resolve(__dirname, '../src/app/api');
+
+    const routeFiles = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name);
+        if (entry.isDirectory()) return routeFiles(path);
+        return entry.name === 'route.ts' ? [path] : [];
+      });
+
+    const files = routeFiles(apiRoot);
+    expect(files.length).toBeGreaterThan(0);
+
+    const HANDLER = /export async function (GET|POST|PATCH|PUT|DELETE)\b/g;
+
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      const handlers = [...source.matchAll(HANDLER)].map((match) => match[1]);
+      expect(handlers.length, `${file} exports no handlers`).toBeGreaterThan(0);
+
+      // `/api/health` is the documented exception: a deploy platform has to be
+      // able to probe liveness unauthenticated. It still asks who the caller
+      // is, and withholds every configuration detail when the answer is nobody.
+      const identifies = /requireUser\(|getUserContext\(/.test(source);
+      expect(identifies, `${file} never establishes who is calling`).toBe(true);
+
+      if (!file.includes('health')) {
+        const calls = source.match(/requireUser\(\)/g) ?? [];
+        expect(
+          calls.length,
+          `${file} has ${handlers.length} handlers but ${calls.length} requireUser() calls`,
+        ).toBeGreaterThanOrEqual(handlers.length);
+      }
+    }
+  });
+
+  it('does not run the middleware on API routes, and does run it on pages', async () => {
+    const { config } = await import('@/middleware');
+    const pattern = new RegExp(`^${String(config.matcher[0])}$`);
+
+    for (const path of ['/api/turn', '/api/sessions', '/api/stt']) {
+      expect(pattern.test(path), `${path} should be handled by its own route`).toBe(false);
+    }
+    // Pages still get their session refreshed on navigation, which is what
+    // stops long sessions from ending in a surprise logout.
+    for (const path of ['/dashboard', '/cook/abc', '/profile', '/login']) {
+      expect(pattern.test(path), `${path} still needs the middleware`).toBe(true);
+    }
   });
 });
 

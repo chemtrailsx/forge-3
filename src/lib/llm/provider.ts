@@ -65,6 +65,49 @@ const MALFORMED_TOOL_CALL = /tool_use_failed|failed to parse tool call|invalid t
  */
 const TOOL_CALL_TOKENS = 1400;
 
+/**
+ * Longest pause worth waiting out rather than answering on the other model.
+ *
+ * Past this the cook is standing in silence wondering whether the thing is
+ * broken, which is worse than a plainer sentence arriving now.
+ */
+const MAX_RATE_LIMIT_WAIT_MS = 2500;
+
+/**
+ * How long the provider asked us to wait, in milliseconds.
+ *
+ * `retry-after` is seconds by convention but arrives fractional from some
+ * providers ("1.48"), so it is parsed as a float. Returns null when the header
+ * is absent or unusable, which is the caller's signal to stop waiting and try
+ * the other model.
+ */
+function retryAfterMs(response: Response): number | null {
+  const header =
+    response.headers.get('retry-after') ?? response.headers.get('x-ratelimit-reset-requests');
+  if (!header) return null;
+  const seconds = Number.parseFloat(header);
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  return Math.round(seconds * 1000);
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('aborted', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException('aborted', 'AbortError'));
+      },
+      { once: true },
+    );
+  });
+}
+
 class MalformedToolCallError extends Error {
   constructor(detail: string) {
     super(`The model produced an unparseable tool call. ${detail}`);
@@ -79,16 +122,57 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     return this.config.model;
   }
 
-  private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
-    const response = await fetch(`${this.config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+  private async send(
+    model: string,
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    return fetch(`${this.config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: this.config.model, ...body }),
+      body: JSON.stringify({ model, ...body }),
       signal,
     });
+  }
+
+  /**
+   * One request, with the free tier's rate limits treated as weather rather
+   * than as failure.
+   *
+   * A cook has both hands in a bowl. "The language model is rate limited right
+   * now" is a true sentence and a useless one, so a 429 is worked around in
+   * the two ways that actually recover the turn:
+   *
+   *   a short wait — the provider says how long, and a limit measured in a
+   *   second or two is over before an apology would finish being spoken;
+   *
+   *   the other model — the free tier meters each one separately, so when the
+   *   large model is exhausted the small one is usually wide open. A plainer
+   *   answer beats no answer, and the cook cannot tell which one is speaking.
+   *
+   * Only then does it give up, and it says something the cook can act on.
+   */
+  private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
+    let response = await this.send(this.config.model, body, signal);
+
+    if (response.status === 429) {
+      const waitMs = retryAfterMs(response);
+      if (waitMs !== null && waitMs <= MAX_RATE_LIMIT_WAIT_MS) {
+        await sleep(waitMs, signal);
+        response = await this.send(this.config.model, body, signal);
+      }
+    }
+
+    if (response.status === 429 && this.config.fallbackModel !== this.config.model) {
+      const fallback = await this.send(this.config.fallbackModel, body, signal);
+      // Only if it actually helped: a 429 from both means the account is out,
+      // and the original response carries the better explanation.
+      if (fallback.ok) return fallback;
+      if (fallback.status !== 429) response = fallback;
+    }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
@@ -101,11 +185,11 @@ export class OpenAiCompatibleProvider implements LlmProvider {
         throw new MalformedToolCallError(detail.slice(0, 200));
       }
 
-      // Rate limits are the common failure on a free tier, and the difference
-      // matters to the caller: retry later vs. fix your key.
+      // Spoken aloud, to someone who cannot read a stack trace and did not
+      // choose the model. Say what happened and what fixes it.
       const message =
         response.status === 429
-          ? 'The language model is rate limited right now.'
+          ? "I've hit my limit with the language service for the moment. Give it a minute and ask me again."
           : `Language model request failed (${response.status}). ${detail.slice(0, 200)}`;
       throw new ProviderError('llm', message);
     }

@@ -74,6 +74,20 @@ export function rimeEnv(): RimeEnv {
 const llmSchema = z.object({
   apiKey: nonEmpty,
   model: nonEmpty.default('openai/gpt-oss-120b'),
+  /**
+   * Used only while the primary model is rate limited.
+   *
+   * The free tier meters each model separately, so when the large one is
+   * exhausted this one is usually wide open — the difference between a
+   * slightly plainer answer and a cook standing over a pan being told to come
+   * back later. Same family, same key, same wire format, and it calls tools,
+   * which a fallback has to: half this product is the timers.
+   *
+   * Verified present on the account rather than assumed — the obvious
+   * candidates from other providers' catalogues are not all served here, and a
+   * fallback that 404s is worse than none.
+   */
+  fallbackModel: nonEmpty.default('openai/gpt-oss-20b'),
   baseUrl: nonEmpty.url().default('https://api.groq.com/openai/v1'),
 });
 
@@ -83,6 +97,7 @@ export function llmEnv(): LlmEnv {
   return llmSchema.parse({
     apiKey: process.env.LLM_API_KEY,
     model: process.env.LLM_MODEL || undefined,
+    fallbackModel: process.env.LLM_FALLBACK_MODEL || undefined,
     baseUrl: process.env.LLM_BASE_URL || undefined,
   });
 }

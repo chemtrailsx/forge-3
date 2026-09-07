@@ -99,6 +99,31 @@ async function main(): Promise<void> {
     record('llm', false, message(error));
   }
 
+  // --- LLM fallback: the model used when the free tier says no --------------
+  //
+  // Checked because it is invisible until the worst moment. A fallback that is
+  // not served by this account looks perfect in code review and does nothing
+  // except turn a rate limit into a 404, at the one instant the cook needed an
+  // answer. It also has to call tools, or the timers stop working exactly when
+  // the kitchen is busiest.
+  try {
+    const config = llmEnv();
+    if (config.fallbackModel === config.model) {
+      record('llm-fallback', false, 'same as the primary model, so a rate limit has nowhere to go');
+    } else {
+      const { OpenAiCompatibleProvider } = await import('../src/lib/llm/provider');
+      const provider = new OpenAiCompatibleProvider({ ...config, model: config.fallbackModel });
+      const result = await provider.complete(
+        [{ role: 'user', content: 'Reply with the single word: ready' }],
+        [],
+        AbortSignal.timeout(30000),
+      );
+      record('llm-fallback', result.content.length > 0, `${config.fallbackModel} is served and replies`);
+    }
+  } catch (error) {
+    record('llm-fallback', false, message(error));
+  }
+
   // --- STT -----------------------------------------------------------------
   // Reachability only: a real transcription needs an audio file, and a
   // synthetic one would test the encoder rather than the endpoint.
