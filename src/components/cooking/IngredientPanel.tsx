@@ -4,6 +4,10 @@ import { formatIngredient } from '@/lib/cooking/scale';
 import type { CookingStateSnapshot } from '@/lib/types';
 
 export function IngredientPanel({ state }: { state: CookingStateSnapshot }) {
+  // Nothing useful to show before a dish exists, and an empty "Ingredients"
+  // card reads as something failing to load.
+  if (state.awaitingRecipe) return null;
+
   return (
     <section className="card">
       <h3>Ingredients</h3>

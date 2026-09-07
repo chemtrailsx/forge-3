@@ -48,6 +48,15 @@ export type VoiceClientEvents = {
 
 const VAD_WINDOW_MS = 20;
 
+/**
+ * How often to ask whether anything needs saying unprompted.
+ *
+ * Five seconds is the coarsest resolution a cook would not notice — a pan that
+ * finished is fine to hear about a few seconds later — and it keeps the poll
+ * cheap enough to run for a whole session.
+ */
+const NUDGE_POLL_MS = 5000;
+
 export class VoiceClient {
   private player: PcmPlayer;
   private vad = new VoiceActivityDetector(DEFAULT_VAD);
@@ -68,6 +77,9 @@ export class VoiceClient {
   private backchannelCount = 0;
   private lastBackchannelAt: number | null = null;
   private speechStartedAt = 0;
+  private nudgeTimer: number | null = null;
+  private nudgeInFlight = false;
+  private lastNudgeAt: number | null = null;
 
   constructor(
     private readonly sampleRate: number,
@@ -95,10 +107,12 @@ export class VoiceClient {
     await this.openMicrophone();
     this.running = true;
     this.setStatus('listening');
+    this.startNudgePolling();
   }
 
   async stop(): Promise<void> {
     this.running = false;
+    this.stopNudgePolling();
     this.turnController?.abort();
     this.turnController = null;
     await this.player.clear();
@@ -110,6 +124,80 @@ export class VoiceClient {
     this.stream = null;
     await this.player.close();
     this.setStatus('idle');
+  }
+
+  // --- speaking first ------------------------------------------------------
+
+  /**
+   * Asks the server, every few seconds, whether anything needs saying.
+   *
+   * The cook cannot see the screen, so a finished pan has to announce itself.
+   * The server owns the decision — see lib/voice/nudge.ts — because it owns
+   * the timers, and because two open tabs must not both announce the same
+   * pasta.
+   */
+  private startNudgePolling(): void {
+    if (this.nudgeTimer !== null) return;
+    this.nudgeTimer = window.setInterval(() => {
+      void this.pollForNudge();
+    }, NUDGE_POLL_MS);
+  }
+
+  private stopNudgePolling(): void {
+    if (this.nudgeTimer !== null) window.clearInterval(this.nudgeTimer);
+    this.nudgeTimer = null;
+  }
+
+  private async pollForNudge(): Promise<void> {
+    // Never while a turn is in flight: the cook is mid-conversation, and
+    // whatever needs saying will still need saying in five seconds.
+    if (!this.running || this.nudgeInFlight || this.turnController) return;
+    if (this.assistantSpeaking || this.vad.isSpeaking) return;
+
+    this.nudgeInFlight = true;
+    try {
+      const response = await fetch('/api/nudge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: this.sessionId,
+          assistantSpeaking: this.assistantSpeaking,
+          userSpeaking: this.vad.isSpeaking,
+          msSinceLastNudge:
+            this.lastNudgeAt === null ? null : Math.round(performance.now() - this.lastNudgeAt),
+        }),
+      });
+      if (!response.ok) return;
+
+      const body = (await response.json()) as {
+        speak: { text: string; contextId: string; turnIndex: number; pcm: string } | null;
+        state?: CookingStateSnapshot;
+      };
+      if (body.state) this.events.onState(body.state);
+      if (!body.speak) return;
+
+      // The cook may have started talking while this was in flight. They win:
+      // the reminder is already marked announced server-side, which is the
+      // right trade — one missed reminder beats talking over them.
+      if (this.vad.isSpeaking || this.turnController) return;
+
+      this.lastNudgeAt = performance.now();
+      this.currentTurnIndex = body.speak.turnIndex;
+      this.tracker.reset();
+      this.tracker.beginSegment(body.speak.contextId, body.speak.text);
+
+      this.events.onTranscript({
+        id: cryptoId(),
+        role: 'assistant',
+        text: body.speak.text,
+        profile: 'precise',
+      });
+      this.player.enqueueBase64(body.speak.contextId, body.speak.pcm);
+    } catch {
+      // A missed poll is a missed reminder, and the next one is seconds away.
+    } finally {
+      this.nudgeInFlight = false;
+    }
   }
 
   private setStatus(status: VoiceStatus): void {

@@ -29,12 +29,11 @@ export const startTimerTool = defineTool({
   ),
   filler: ['Setting that now.', 'One moment.'],
   async execute(args, ctx) {
-    const timer = await startTimer(
-      ctx.db,
-      ctx.state.session.id,
-      args.duration_seconds * 1000,
-      args.label,
-    );
+    const timer = await startTimer(ctx.db, {
+      sessionId: ctx.state.session.id,
+      durationMs: args.duration_seconds * 1000,
+      label: args.label,
+    });
     return {
       stateChanged: true,
       data: {

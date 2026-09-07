@@ -32,12 +32,32 @@ export default async function DashboardPage() {
     <main className="page">
       <TopBar email={ctx.email} current="cook" />
 
+      {/*
+        The main way in. You do not pick a recipe first — you start talking and
+        say what you feel like making, and the assistant writes the recipe
+        around what you have. The saved list below is for coming back to
+        something, not the price of entry.
+      */}
+      <section className="card" style={{ marginBottom: 18 }}>
+        <div className="spread" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ marginBottom: 4 }}>What are you making?</h2>
+            <p className="muted small" style={{ margin: 0, maxWidth: 460 }}>
+              Start a session and just say it — &ldquo;I want to make pasta for three&rdquo;. Tell it
+              what you have and what you don&rsquo;t, and it will work around you. It keeps track of
+              anything left on the heat and tells you when to come back.
+            </p>
+          </div>
+          <StartCookingButton label="Start cooking" />
+        </div>
+      </section>
+
       <div className="grid two">
         <section className="card">
           <h3>Your recipes</h3>
           {recipes.length === 0 ? (
-            <p className="muted">
-              No recipes yet. Start a session and dictate one — the assistant can save it for you.
+            <p className="muted small">
+              Nothing saved yet. Anything you cook can be kept for next time — just ask.
             </p>
           ) : (
             <ul className="plain">
@@ -53,7 +73,7 @@ export default async function DashboardPage() {
                     {recipe.ingredients.slice(0, 4).map(formatIngredient).join(', ')}
                     {recipe.ingredients.length > 4 ? '…' : ''}
                   </p>
-                  <StartCookingButton recipeId={recipe.id} />
+                  <StartCookingButton recipeId={recipe.id} label="Cook this" variant="plain" />
                 </li>
               ))}
             </ul>

@@ -20,6 +20,7 @@ tools, interruption handling — is this application's job.
 | **Voice fillers during tool calls** — speech instead of dead air | `runTools()` in [`src/lib/voice/orchestrator.ts`](src/lib/voice/orchestrator.ts); wording lives on each tool |
 | **Dynamic speaking speed** — slower for measurements and timers | [`src/lib/tts/speech-profile.ts`](src/lib/tts/speech-profile.ts), [`src/lib/tts/speakable.ts`](src/lib/tts/speakable.ts) |
 | **Persistent cooking context** — recipe, step, servings, subs, timers, corrections | [`src/lib/cooking/state.ts`](src/lib/cooking/state.ts) |
+| **Speaking first** — announcing a pan that finished while you were elsewhere | [`src/lib/voice/nudge.ts`](src/lib/voice/nudge.ts), [`src/app/api/nudge/route.ts`](src/app/api/nudge/route.ts) |
 
 ---
 
@@ -114,6 +115,7 @@ in the SQL editor (or with `psql "$DATABASE_URL" -f ...`):
 ```
 supabase/migrations/0001_schema.sql
 supabase/migrations/0002_rls.sql
+supabase/migrations/0003_parallel_tasks.sql
 ```
 
 `0002` enables and **forces** row-level security on every table, adds ownership triggers so a
@@ -177,6 +179,30 @@ saved preferences:
 ```bash
 npm run seed -- you@example.com
 ```
+
+### Cooking something new
+
+You do not have to have saved anything. Start a session and say what you feel like making:
+
+> "I want to make pasta for three." · "Something with chicken and rice." · "I've got mince and no
+> onions, what can I do?"
+
+`plan_recipe` writes the recipe around what you say you have, attaches it to the session, and the
+assistant takes you through it a step at a time. Mention a missing ingredient whenever it comes up
+and it adapts rather than starting over.
+
+**Parallel work.** Each step is marked `active` or `passive` with a duration. Reaching a passive one
+— water boiling, a sauce reducing, something in the oven — starts its clock automatically and frees
+you to do the next thing. Nothing needs to be asked for: the point is that the pan nobody is
+watching is exactly the pan that needs watching.
+
+**It speaks first.** While a session is open the browser asks the server every few seconds whether
+anything needs saying, and the server answers from the database — so a reminder survives a reload
+and two open tabs cannot both announce the same pasta. The policy for *when* it may interrupt lives
+in [`src/lib/voice/nudge.ts`](src/lib/voice/nudge.ts) and is a pure function, because this is the one
+place in the product where the machine takes a turn nobody offered it, and it is the easiest place
+to make unbearable. It never talks over you, never repeats itself, and holds a minimum gap between
+interruptions.
 
 ### Adding your own recipes
 

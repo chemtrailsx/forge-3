@@ -7,22 +7,28 @@ import type { TimerView } from '@/lib/types';
  * Timers count down locally from `startedAt + durationMs`, which the server
  * sent. Ticking a local counter would drift; recomputing from the absolute end
  * time each second cannot.
+ *
+ * Two lists, because they answer different questions. `timers` are bells the
+ * cook set. `running` is work the assistant is watching on their behalf — the
+ * pasta that went in while they chop — and seeing it is what makes the
+ * automatic reminder feel expected rather than startling.
  */
-export function TimerPanel({ timers }: { timers: TimerView[] }) {
+export function TimerPanel({ timers, running }: { timers: TimerView[]; running: TimerView[] }) {
   const [, setTick] = useState(0);
+  const total = timers.length + running.length;
 
   useEffect(() => {
-    if (timers.length === 0) return;
+    if (total === 0) return;
     const id = setInterval(() => setTick((n) => n + 1), 500);
     return () => clearInterval(id);
-  }, [timers.length]);
+  }, [total]);
 
-  if (timers.length === 0) {
+  if (total === 0) {
     return (
       <section className="card">
-        <h3>Timers</h3>
+        <h3>On the go</h3>
         <p className="muted small" style={{ margin: 0 }}>
-          None running. Say &ldquo;set a timer for eight minutes&rdquo;.
+          Nothing cooking. Say &ldquo;set a timer for eight minutes&rdquo; any time.
         </p>
       </section>
     );
@@ -30,22 +36,42 @@ export function TimerPanel({ timers }: { timers: TimerView[] }) {
 
   return (
     <section className="card">
-      <h3>Timers</h3>
-      <ul className="plain">
-        {timers.map((timer) => {
-          const endsAt = new Date(timer.startedAt).getTime() + timer.durationMs;
-          const remaining = Math.max(0, endsAt - Date.now());
-          return (
-            <li key={timer.id}>
-              <span>{timer.label}</span>
-              <span className={`timer${remaining === 0 ? ' expired' : ''}`}>
-                {remaining === 0 ? 'done' : formatRemaining(remaining)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      {running.length > 0 ? (
+        <>
+          <h3>Cooking now</h3>
+          <ul className="plain">
+            {running.map((timer) => (
+              <TimerRow key={timer.id} timer={timer} />
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {timers.length > 0 ? (
+        <>
+          <h3 style={{ marginTop: running.length > 0 ? 16 : 0 }}>Timers</h3>
+          <ul className="plain">
+            {timers.map((timer) => (
+              <TimerRow key={timer.id} timer={timer} />
+            ))}
+          </ul>
+        </>
+      ) : null}
     </section>
+  );
+}
+
+function TimerRow({ timer }: { timer: TimerView }) {
+  const endsAt = new Date(timer.startedAt).getTime() + timer.durationMs;
+  const remaining = Math.max(0, endsAt - Date.now());
+
+  return (
+    <li>
+      <span>{timer.label}</span>
+      <span className={`timer${remaining === 0 ? ' expired' : ''}`}>
+        {remaining === 0 ? 'ready' : formatRemaining(remaining)}
+      </span>
+    </li>
   );
 }
 

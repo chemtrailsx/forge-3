@@ -29,9 +29,21 @@ What you know:
 - Answer from that state directly. Do not call a tool for something already in front of you.
 - Use a tool when you need the user's saved data, a calculation, a timer, or to remember something.
 
+Starting a dish:
+- If there is no recipe yet and the user says what they want to make, call plan_recipe straight away. Do not ask them to pick from their saved recipes, and do not ask a list of questions first — one clarifying question at most, and only if you genuinely cannot proceed.
+- Build the recipe around what they say they have and skip what they say they lack. If they mention a missing ingredient later, adapt rather than starting over.
+- After planning, say the dish and the first step. Never read the whole method out.
+
+Running the kitchen:
+- Some steps run by themselves — water boiling, a sauce reducing, something in the oven. When the user starts one, move them on to something useful instead of leaving them watching a pan.
+- You are told which steps are passive and how long they run, and what is unattended right now. Use it: "while that's coming to the boil, chop the onion."
+- You do not need to remind them yourself when something finishes. That happens automatically, and you will see it in the conversation. Do not promise to set a reminder you are not setting.
+- One instruction at a time. Two things at once is the most a person can hold, and only when one of them is unattended.
+
 Honesty:
 - If a tool reports it has no answer, say so plainly. Never invent a substitution ratio, a cooking time or a quantity.
-- Never claim a tool result before the tool has returned it.`;
+- Never claim a tool result before the tool has returned it.
+- For meat, poultry, fish and eggs, never give a time as proof it is done. Give the temperature or the visual check that settles it, and say the time is a guide.`;
 
 export type PromptInput = {
   state: CookingStateSnapshot;
@@ -42,14 +54,29 @@ export type PromptInput = {
 };
 
 export function describeState(state: CookingStateSnapshot): string {
+  if (state.awaitingRecipe) {
+    return [
+      'No dish chosen yet. This session is empty.',
+      'The moment the user says what they want to cook, call plan_recipe.',
+      state.servings ? `They appear to be cooking for ${state.servings}.` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  const attention = (step: { attention: 'active' | 'passive' } | null) =>
+    step?.attention === 'passive' ? ' (runs by itself — send them off to do something else)' : '';
+
   const lines: string[] = [
     `Recipe: ${state.title}`,
     state.totalSteps > 0
-      ? `Step ${state.currentStep + 1} of ${state.totalSteps}: ${state.currentStepText ?? '(none)'}`
+      ? `Step ${state.currentStep + 1} of ${state.totalSteps}: ${state.currentStepText ?? '(none)'}${attention(state.currentStepDetail)}`
       : 'No steps recorded for this recipe.',
   ];
 
-  if (state.nextStepText) lines.push(`Next step: ${state.nextStepText}`);
+  if (state.nextStepText) {
+    lines.push(`Next step: ${state.nextStepText}${attention(state.nextStepDetail)}`);
+  }
   lines.push(
     `Cooking for ${state.servings} ${state.servings === 1 ? 'person' : 'people'}` +
       (state.servings !== state.baseServings ? ` (recipe is written for ${state.baseServings})` : ''),
@@ -71,6 +98,17 @@ export function describeState(state: CookingStateSnapshot): string {
     );
   } else {
     lines.push('Running timers: none.');
+  }
+
+  // What is cooking unattended right now. This is what lets the assistant say
+  // "while that's boiling, chop the onion" instead of standing the cook in
+  // front of a pan.
+  if (state.running.length > 0) {
+    lines.push(
+      `Unattended right now: ${state.running
+        .map((t) => `${t.label}, ${Math.ceil(t.remainingMs / 60_000)} minutes left`)
+        .join('; ')}. The user is free to do something else meanwhile, and will be told automatically when each is done.`,
+    );
   }
   if (state.corrections.length > 0) {
     lines.push(`Recent corrections from the user: ${state.corrections.join('; ')}`);

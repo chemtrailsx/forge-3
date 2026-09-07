@@ -37,7 +37,9 @@ export default async function CookPage({
   return (
     <main className="page">
       <TopBar email={ctx.email} current="cook" />
-      <h1 style={{ marginBottom: 18 }}>{snapshot.title}</h1>
+      <h1 style={{ marginBottom: 18 }}>
+        {snapshot.awaitingRecipe ? 'Ready when you are' : snapshot.title}
+      </h1>
       <VoiceConsole
         sessionId={sessionId}
         initialState={snapshot}

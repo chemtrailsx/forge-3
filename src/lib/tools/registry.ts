@@ -4,6 +4,7 @@ import type { ToolSchema } from '../llm/types';
 import {
   getRecentCookingSessionsTool,
   getRecipeTool,
+  planRecipeTool,
   saveRecipeTool,
   scaleRecipeTool,
   searchUserRecipesTool,
@@ -21,6 +22,7 @@ import type { ToolContext, ToolDefinition } from './types';
  * against.
  */
 export const TOOLS: ToolDefinition[] = [
+  planRecipeTool,
   getRecipeTool,
   searchUserRecipesTool,
   getRecentCookingSessionsTool,

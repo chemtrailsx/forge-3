@@ -27,19 +27,24 @@ export async function listActiveTimers(db: Db, sessionId?: string): Promise<Time
   return ((data ?? []) as TimerRow[]).map((row) => toView(toTimer(row)));
 }
 
-export async function startTimer(
-  db: Db,
-  sessionId: string | null,
-  durationMs: number,
-  label: string,
-): Promise<TimerView> {
+export type StartTimerInput = {
+  sessionId: string | null;
+  durationMs: number;
+  label: string;
+  kind?: TimerRecord['kind'];
+  stepIndex?: number | null;
+};
+
+export async function startTimer(db: Db, input: StartTimerInput): Promise<TimerView> {
   const { data, error } = await db.supabase
     .from('timers')
     .insert({
       user_id: db.userId,
-      session_id: sessionId,
-      duration_ms: Math.round(durationMs),
-      label: label.trim() || 'timer',
+      session_id: input.sessionId,
+      duration_ms: Math.round(input.durationMs),
+      label: input.label.trim() || 'timer',
+      kind: input.kind ?? 'timer',
+      step_index: input.stepIndex ?? null,
     })
     .select(TIMER_COLUMNS)
     .single();
@@ -58,16 +63,58 @@ export async function cancelTimer(db: Db, timerId: string): Promise<void> {
   assertOk(error, 'timer');
 }
 
-/** Marks elapsed timers completed so they stop appearing as active. */
+/** Cancels whatever is still counting down for a step, when the cook moves on. */
+export async function cancelStepTimers(db: Db, sessionId: string, stepIndex: number): Promise<void> {
+  const { error } = await db.supabase
+    .from('timers')
+    .update({ status: 'cancelled' })
+    .eq('user_id', db.userId)
+    .eq('session_id', sessionId)
+    .eq('kind', 'step')
+    .eq('step_index', stepIndex)
+    .eq('status', 'running');
+
+  assertOk(error, 'timer');
+}
+
+/**
+ * Records that the assistant has spoken about this timer.
+ *
+ * This is what makes a reminder fire once. It is written before the words are
+ * spoken rather than after, because a reminder said twice is worse than one
+ * missed: the cook is already at the pan.
+ */
+export async function markAnnounced(
+  db: Db,
+  timerId: string,
+  what: 'finished' | 'almost',
+): Promise<void> {
+  const column = what === 'finished' ? 'reminded_at' : 'heads_up_at';
+  const { error } = await db.supabase
+    .from('timers')
+    .update({ [column]: new Date().toISOString() })
+    .eq('user_id', db.userId)
+    .eq('id', timerId);
+
+  assertOk(error, 'timer');
+}
+
+/**
+ * Retires elapsed timers — but only ones the cook has already been told about.
+ *
+ * An expired timer is the entire trigger for a proactive reminder, so reaping
+ * on expiry alone would delete the fact before anything could act on it. It
+ * stays until `reminded_at` is set.
+ */
 export async function reapExpiredTimers(db: Db, timers: TimerView[]): Promise<void> {
-  const expired = timers.filter((t) => t.expired).map((t) => t.id);
-  if (expired.length === 0) return;
+  const finished = timers.filter((t) => t.expired && t.remindedAt !== null).map((t) => t.id);
+  if (finished.length === 0) return;
 
   const { error } = await db.supabase
     .from('timers')
     .update({ status: 'completed' })
     .eq('user_id', db.userId)
-    .in('id', expired);
+    .in('id', finished);
 
   assertOk(error, 'timer');
 }

@@ -26,6 +26,10 @@ describe('tool surface', () => {
         'get_recent_cooking_sessions',
         'get_recipe',
         'get_timer_status',
+        // Not in the original nine: this is what lets a cook open the app and
+        // say what they feel like making, rather than having to have saved it
+        // in advance.
+        'plan_recipe',
         'save_recipe',
         'save_user_preference',
         'scale_recipe',

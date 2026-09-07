@@ -50,7 +50,16 @@ const DEFAULTS: Record<string, Row> = {
   recipes: { ingredients: [], steps: [], servings: 2, is_favorite: false, source: null },
   cooking_sessions: { recipe_id: null, current_step: 0, status: 'active', notes: {} },
   user_memory: { kind: 'preference' },
-  timers: { label: 'timer', status: 'running', started_at: new Date().toISOString(), session_id: null },
+  timers: {
+    label: 'timer',
+    status: 'running',
+    started_at: new Date().toISOString(),
+    session_id: null,
+    kind: 'timer',
+    step_index: null,
+    heads_up_at: null,
+    reminded_at: null,
+  },
   conversation_turns: { text: '', heard_text: null, interrupted: false, metrics: {} },
 };
 

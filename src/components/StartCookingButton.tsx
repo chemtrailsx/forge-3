@@ -3,8 +3,22 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-/** Creates a cooking session for a recipe, then hands over to the voice screen. */
-export function StartCookingButton({ recipeId, label = 'Start cooking' }: { recipeId: string; label?: string }) {
+/**
+ * Creates a cooking session, then hands over to the voice screen.
+ *
+ * With no `recipeId` this starts an empty session — the ordinary way in, where
+ * the cook opens the app and says what they feel like making. With one, it
+ * resumes from something they already have.
+ */
+export function StartCookingButton({
+  recipeId,
+  label = 'Start cooking',
+  variant = 'primary',
+}: {
+  recipeId?: string;
+  label?: string;
+  variant?: 'primary' | 'plain';
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +30,7 @@ export function StartCookingButton({ recipeId, label = 'Start cooking' }: { reci
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId }),
+        body: JSON.stringify({ recipeId: recipeId ?? null }),
       });
       const body = (await response.json()) as
         | { session: { id: string } }
@@ -36,7 +50,7 @@ export function StartCookingButton({ recipeId, label = 'Start cooking' }: { reci
 
   return (
     <div className="row">
-      <button className="primary" onClick={start} disabled={busy}>
+      <button className={variant === 'primary' ? 'primary' : ''} onClick={start} disabled={busy}>
         {busy ? 'Starting…' : label}
       </button>
       {error ? <span className="small" style={{ color: 'var(--danger)' }}>{error}</span> : null}

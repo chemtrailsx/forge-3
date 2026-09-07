@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSnapshot,
   clampStep,
+  describeStep,
   loadCookingState,
   moveToStep,
   recordCorrection,
@@ -12,7 +13,7 @@ import { formatIngredient, scaleIngredients, scaleQuantity } from '@/lib/cooking
 import { findSubstitution } from '@/lib/cooking/substitutions';
 import { toView } from '@/lib/db/timers';
 import { ALICE, ALICE_SESSION, makeDb, seedTables } from './helpers/fixtures';
-import type { CookingSession, Recipe } from '@/lib/types';
+import type { CookingSession, Recipe, TimerRecord } from '@/lib/types';
 
 const RECIPE: Recipe = {
   id: 'r1',
@@ -27,7 +28,13 @@ const RECIPE: Recipe = {
     { name: 'garlic', quantity: 3, unit: 'cloves' },
     { name: 'salt', quantity: null, unit: null, note: 'to taste' },
   ],
-  steps: ['Boil water.', 'Cook pasta.', 'Serve.'],
+  steps: [
+    // A passive step in the middle, because that is the case the parallel
+    // logic exists for: the cook is free while the pasta boils.
+    { text: 'Boil water.', durationSeconds: null, attention: 'active' },
+    { text: 'Cook pasta.', durationSeconds: 480, attention: 'passive' },
+    { text: 'Serve.', durationSeconds: null, attention: 'active' },
+  ],
 };
 
 const SESSION: CookingSession = {
@@ -94,10 +101,26 @@ describe('snapshot', () => {
   });
 });
 
+/** A running timer, with only the fields a test cares about overridden. */
+function timerRecord(overrides: Partial<TimerRecord> = {}): TimerRecord {
+  return {
+    id: 't',
+    label: 'pasta',
+    durationMs: 480_000,
+    startedAt: new Date().toISOString(),
+    status: 'running',
+    kind: 'timer',
+    stepIndex: null,
+    headsUpAt: null,
+    remindedAt: null,
+    ...overrides,
+  };
+}
+
 describe('timers', () => {
   it('derives remaining time from the start instant, not a stored counter', () => {
     const startedAt = new Date(Date.now() - 60_000).toISOString();
-    const view = toView({ id: 't', label: 'pasta', durationMs: 480_000, startedAt, status: 'running' });
+    const view = toView(timerRecord({ startedAt }));
 
     expect(view.remainingMs).toBeGreaterThan(400_000);
     expect(view.remainingMs).toBeLessThanOrEqual(420_000);
@@ -106,7 +129,7 @@ describe('timers', () => {
 
   it('reports an elapsed timer as expired rather than negative', () => {
     const startedAt = new Date(Date.now() - 900_000).toISOString();
-    const view = toView({ id: 't', label: 'pasta', durationMs: 480_000, startedAt, status: 'running' });
+    const view = toView(timerRecord({ startedAt }));
     expect(view.remainingMs).toBe(0);
     expect(view.expired).toBe(true);
   });
@@ -164,6 +187,104 @@ describe('persistent state across a turn', () => {
     const final = await loadCookingState(db, ALICE_SESSION);
     expect(final.snapshot.corrections).toHaveLength(5);
     expect(final.snapshot.corrections.at(-1)).toBe('correction 7');
+  });
+});
+
+describe('naming a step for a spoken reminder', () => {
+  /**
+   * This string is read aloud in "Your ___ should be ready now", so it has to
+   * be the thing being cooked, not the instruction repeated back.
+   */
+  it('reduces an instruction to the thing it produces', () => {
+    expect(describeStep('Add the spaghetti and cook for eight minutes, stirring once')).toBe(
+      'spaghetti',
+    );
+    expect(describeStep('Simmer the sauce for forty minutes')).toBe('sauce');
+    expect(describeStep('Roast the chicken for seventy-five minutes until the juices run clear')).toBe(
+      'chicken',
+    );
+  });
+
+  it('never leaves an article that would double up after "your"', () => {
+    for (const step of [
+      'Add the spaghetti and cook for eight minutes',
+      'Boil a large pan of water',
+      'Put some rice on to steam for twenty minutes',
+    ]) {
+      expect(describeStep(step)).not.toMatch(/^(the|a|an|some|your)\b/i);
+    }
+  });
+
+  it('falls back to something sayable rather than an empty string', () => {
+    expect(describeStep('')).toBe('that');
+    expect(describeStep('Wait')).toBe('Wait');
+  });
+});
+
+describe('parallel work', () => {
+  it('starts the clock by itself when the cook reaches an unattended step', async () => {
+    const tables = seedTables();
+    // Step 2 of the seeded pasta is "cook for eight minutes" — give it the
+    // structure a planned recipe would have.
+    const recipe = tables.recipes?.find((row) => row.id === 'aaaaaaaa-0000-4000-8000-000000000001');
+    recipe!.steps = [
+      { text: 'Bring a pan of water to the boil.', attention: 'active' },
+      { text: 'Add the spaghetti and cook for eight minutes.', duration_seconds: 480, attention: 'passive' },
+      { text: 'Drain and serve.', attention: 'active' },
+    ];
+
+    const { db } = makeDb(ALICE, tables);
+    const state = await loadCookingState(db, ALICE_SESSION);
+    await moveToStep(db, state, 1);
+
+    const after = await loadCookingState(db, ALICE_SESSION);
+    // Nobody asked for a timer. The cook said "it's in" and walked away, which
+    // is the whole point: the thing being watched is the thing nobody watches.
+    expect(after.snapshot.running).toHaveLength(1);
+    expect(after.snapshot.running[0]?.label).toBe('spaghetti');
+    expect(after.snapshot.running[0]?.stepIndex).toBe(1);
+    expect(after.snapshot.running[0]?.kind).toBe('step');
+  });
+
+  it('does not start a second clock for a step already running', async () => {
+    const tables = seedTables();
+    const recipe = tables.recipes?.find((row) => row.id === 'aaaaaaaa-0000-4000-8000-000000000001');
+    recipe!.steps = [
+      { text: 'Boil water.', attention: 'active' },
+      { text: 'Cook the pasta for eight minutes.', duration_seconds: 480, attention: 'passive' },
+    ];
+
+    const { db } = makeDb(ALICE, tables);
+    await moveToStep(db, await loadCookingState(db, ALICE_SESSION), 1);
+    await moveToStep(db, await loadCookingState(db, ALICE_SESSION), 1);
+
+    const after = await loadCookingState(db, ALICE_SESSION);
+    expect(after.snapshot.running).toHaveLength(1);
+  });
+
+  it('leaves an active step alone', async () => {
+    const tables = seedTables();
+    const recipe = tables.recipes?.find((row) => row.id === 'aaaaaaaa-0000-4000-8000-000000000001');
+    recipe!.steps = [{ text: 'Chop the onion.', attention: 'active' }];
+
+    const { db } = makeDb(ALICE, tables);
+    await moveToStep(db, await loadCookingState(db, ALICE_SESSION), 0);
+
+    const after = await loadCookingState(db, ALICE_SESSION);
+    expect(after.snapshot.running).toHaveLength(0);
+  });
+});
+
+describe('a session with no dish yet', () => {
+  it('reports that it is waiting rather than pretending to have a recipe', () => {
+    const snapshot = buildSnapshot({ ...SESSION, recipeId: null }, null, []);
+    expect(snapshot.awaitingRecipe).toBe(true);
+    expect(snapshot.totalSteps).toBe(0);
+    expect(snapshot.currentStepDetail).toBeNull();
+  });
+
+  it('stops awaiting once a recipe is attached', () => {
+    expect(buildSnapshot(SESSION, RECIPE, []).awaitingRecipe).toBe(false);
   });
 });
 

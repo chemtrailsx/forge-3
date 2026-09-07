@@ -4,6 +4,7 @@ import type {
   Ingredient,
   MemoryEntry,
   Recipe,
+  RecipeStep,
   SessionNotes,
   TimerRecord,
 } from '../types';
@@ -43,7 +44,7 @@ export function toRecipe(row: RecipeRow): Recipe {
     userId: row.user_id,
     title: row.title,
     ingredients: parseOrDefault(ingredientsSchema, row.ingredients, [] as Ingredient[]),
-    steps: parseOrDefault(stepsSchema, row.steps, [] as string[]),
+    steps: parseOrDefault(stepsSchema, row.steps, [] as RecipeStep[]),
     servings: row.servings,
     isFavorite: row.is_favorite,
     source: row.source,
@@ -107,9 +108,14 @@ export type TimerRow = {
   duration_ms: number;
   started_at: string;
   status: string;
+  kind?: string | null;
+  step_index?: number | null;
+  heads_up_at?: string | null;
+  reminded_at?: string | null;
 };
 
-export const TIMER_COLUMNS = 'id, label, duration_ms, started_at, status';
+export const TIMER_COLUMNS =
+  'id, label, duration_ms, started_at, status, kind, step_index, heads_up_at, reminded_at';
 
 export function toTimer(row: TimerRow): TimerRecord {
   const status: TimerRecord['status'] =
@@ -120,6 +126,10 @@ export function toTimer(row: TimerRow): TimerRecord {
     durationMs: row.duration_ms,
     startedAt: row.started_at,
     status,
+    kind: row.kind === 'step' ? 'step' : 'timer',
+    stepIndex: row.step_index ?? null,
+    headsUpAt: row.heads_up_at ?? null,
+    remindedAt: row.reminded_at ?? null,
   };
 }
 

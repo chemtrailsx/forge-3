@@ -29,7 +29,41 @@ export const ingredientsSchema = z
   .array(z.union([z.string().trim().min(1).max(200), ingredientSchema]))
   .max(60)
   .transform((entries) => entries.map(coerceIngredient));
-export const stepsSchema = z.array(z.string().trim().min(1).max(1000)).max(60);
+export const stepObjectSchema = z.object({
+  text: z.string().trim().min(1).max(1000),
+  duration_seconds: z.number().int().min(0).max(86400).nullable().optional(),
+  durationSeconds: z.number().int().min(0).max(86400).nullable().optional(),
+  attention: z.enum(['active', 'passive']).optional(),
+});
+
+/**
+ * Steps arrive as plain strings (every recipe written before this existed, and
+ * every model that ignores the richer shape) or as objects carrying a duration
+ * and whether the step needs hands.
+ *
+ * Both normalise to `RecipeStep`. Reading a legacy string array as structure
+ * rather than migrating the rows means an older recipe still cooks — it simply
+ * has no unattended steps to track, which is exactly true of what was stored.
+ */
+export const stepsSchema = z
+  .array(z.union([z.string().trim().min(1).max(1000), stepObjectSchema]))
+  .max(60)
+  .transform((entries) =>
+    entries.map((entry) => {
+      if (typeof entry === 'string') {
+        return { text: entry, durationSeconds: null, attention: 'active' as const };
+      }
+      const duration = entry.durationSeconds ?? entry.duration_seconds ?? null;
+      return {
+        text: entry.text,
+        durationSeconds: duration && duration > 0 ? duration : null,
+        // A step with unattended time is passive whether or not the model
+        // remembered to say so: "simmer for forty minutes" does not need the
+        // label to be true.
+        attention: entry.attention ?? (duration && duration > 0 ? 'passive' : 'active'),
+      };
+    }),
+  );
 
 export const substitutionSchema = z.object({
   from: z.string().trim().min(1).max(120),
