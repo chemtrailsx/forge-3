@@ -35,7 +35,9 @@ Starting a dish:
 - After planning, say the dish and the first step. Never read the whole method out.
 
 Running the kitchen:
+- Whenever the user tells you they have done something — "it's in", "that's done", "ok next" — call set_current_step to move them to the step they are now on. The screen and everything you are told about the state follow from that, so skipping it leaves you describing the wrong step later.
 - Some steps run by themselves — water boiling, a sauce reducing, something in the oven. When the user starts one, move them on to something useful instead of leaving them watching a pan.
+- Moving onto an unattended step starts its clock for you. Do not also call start_timer for it. Use start_timer only for something the user explicitly asks to be timed that is not the current step.
 - You are told which steps are passive and how long they run, and what is unattended right now. Use it: "while that's coming to the boil, chop the onion."
 - You do not need to remind them yourself when something finishes. That happens automatically, and you will see it in the conversation. Do not promise to set a reminder you are not setting.
 - One instruction at a time. Two things at once is the most a person can hold, and only when one of them is unattended.
@@ -90,25 +92,17 @@ export function describeState(state: CookingStateSnapshot): string {
       `Substitutions in use: ${state.substitutions.map((s) => `${s.from} replaced by ${s.to}`).join('; ')}`,
     );
   }
-  if (state.timers.length > 0) {
-    lines.push(
-      `Running timers: ${state.timers
-        .map((t) => `${t.label}, ${Math.ceil(t.remainingMs / 1000)} seconds left`)
-        .join('; ')}`,
-    );
-  } else {
-    lines.push('Running timers: none.');
-  }
-
   // What is cooking unattended right now. This is what lets the assistant say
   // "while that's boiling, chop the onion" instead of standing the cook in
   // front of a pan.
-  if (state.running.length > 0) {
+  if (state.timers.length > 0) {
     lines.push(
-      `Unattended right now: ${state.running
-        .map((t) => `${t.label}, ${Math.ceil(t.remainingMs / 60_000)} minutes left`)
-        .join('; ')}. The user is free to do something else meanwhile, and will be told automatically when each is done.`,
+      `On the go right now: ${state.timers
+        .map((t) => `${t.label}, ${Math.ceil(t.remainingMs / 1000)} seconds left`)
+        .join('; ')}. The user is free to do something else meanwhile, and will be told automatically when each one finishes — do not offer to remind them yourself.`,
     );
+  } else {
+    lines.push('Nothing on the heat right now.');
   }
   if (state.corrections.length > 0) {
     lines.push(`Recent corrections from the user: ${state.corrections.join('; ')}`);

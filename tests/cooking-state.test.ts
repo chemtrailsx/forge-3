@@ -240,10 +240,10 @@ describe('parallel work', () => {
     const after = await loadCookingState(db, ALICE_SESSION);
     // Nobody asked for a timer. The cook said "it's in" and walked away, which
     // is the whole point: the thing being watched is the thing nobody watches.
-    expect(after.snapshot.running).toHaveLength(1);
-    expect(after.snapshot.running[0]?.label).toBe('spaghetti');
-    expect(after.snapshot.running[0]?.stepIndex).toBe(1);
-    expect(after.snapshot.running[0]?.kind).toBe('step');
+    expect(after.snapshot.timers).toHaveLength(1);
+    expect(after.snapshot.timers[0]?.label).toBe('spaghetti');
+    expect(after.snapshot.timers[0]?.stepIndex).toBe(1);
+    expect(after.snapshot.timers[0]?.kind).toBe('step');
   });
 
   it('does not start a second clock for a step already running', async () => {
@@ -259,7 +259,7 @@ describe('parallel work', () => {
     await moveToStep(db, await loadCookingState(db, ALICE_SESSION), 1);
 
     const after = await loadCookingState(db, ALICE_SESSION);
-    expect(after.snapshot.running).toHaveLength(1);
+    expect(after.snapshot.timers).toHaveLength(1);
   });
 
   it('leaves an active step alone', async () => {
@@ -271,7 +271,7 @@ describe('parallel work', () => {
     await moveToStep(db, await loadCookingState(db, ALICE_SESSION), 0);
 
     const after = await loadCookingState(db, ALICE_SESSION);
-    expect(after.snapshot.running).toHaveLength(0);
+    expect(after.snapshot.timers).toHaveLength(0);
   });
 });
 

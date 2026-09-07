@@ -68,10 +68,7 @@ export function buildSnapshot(
     baseServings,
     ingredients,
     substitutions: session.notes.substitutions ?? [],
-    // Timers the cook set, separated from work the assistant is watching on
-    // their behalf, because the two are described differently out loud.
-    timers: live.filter((timer) => timer.kind === 'timer'),
-    running: live.filter((timer) => timer.kind === 'step'),
+    timers: live,
     corrections: session.notes.corrections ?? [],
     awaitingRecipe: recipe === null,
   };
@@ -100,7 +97,7 @@ export async function moveToStep(
 
   const step = state.recipe?.steps[next];
   if (step && step.attention === 'passive' && step.durationSeconds && step.durationSeconds > 0) {
-    const alreadyRunning = state.snapshot.running.some((timer) => timer.stepIndex === next);
+    const alreadyRunning = state.snapshot.timers.some((timer) => timer.stepIndex === next);
     if (!alreadyRunning) {
       await startTimer(db, {
         sessionId: state.session.id,

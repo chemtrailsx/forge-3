@@ -48,6 +48,23 @@ function toWire(message: ChatMessage): WireMessage {
   }
 }
 
+/** Providers word this differently; all of them mean the same thing. */
+const MALFORMED_TOOL_CALL = /tool_use_failed|failed to parse tool call|invalid tool call/i;
+
+/**
+ * Room for one reply. Generous because `plan_recipe` writes a whole recipe in
+ * a single tool call, and a recipe cut off mid-brace is unparseable rather
+ * than merely short.
+ */
+const TOOL_CALL_TOKENS = 1400;
+
+class MalformedToolCallError extends Error {
+  constructor(detail: string) {
+    super(`The model produced an unparseable tool call. ${detail}`);
+    this.name = 'MalformedToolCallError';
+  }
+}
+
 export class OpenAiCompatibleProvider implements LlmProvider {
   constructor(private readonly config: LlmEnv) {}
 
@@ -68,6 +85,15 @@ export class OpenAiCompatibleProvider implements LlmProvider {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
+
+      // A tool call the model failed to write as valid JSON. This is a
+      // sampling failure, not a request that will never work: the same prompt
+      // usually succeeds on a second attempt, and the alternative is losing
+      // the user's entire turn to a truncated brace.
+      if (response.status === 400 && MALFORMED_TOOL_CALL.test(detail)) {
+        throw new MalformedToolCallError(detail.slice(0, 200));
+      }
+
       // Rate limits are the common failure on a free tier, and the difference
       // matters to the caller: retry later vs. fix your key.
       const message =
@@ -84,27 +110,46 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     tools: ToolSchema[],
     signal: AbortSignal,
   ): Promise<ChatResult> {
-    const response = await this.post(
-      {
-        messages: messages.map(toWire),
-        temperature: 0.4,
-        max_tokens: 500,
-        ...(tools.length > 0
-          ? {
-              tools: tools.map((tool) => ({
-                type: 'function',
-                function: {
-                  name: tool.name,
-                  description: tool.description,
-                  parameters: tool.parameters,
-                },
-              })),
-              tool_choice: 'auto',
-            }
-          : {}),
-      },
-      signal,
-    );
+    const request = (maxTokens: number) => ({
+      messages: messages.map(toWire),
+      temperature: 0.4,
+      max_tokens: maxTokens,
+      ...(tools.length > 0
+        ? {
+            tools: tools.map((tool) => ({
+              type: 'function',
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+              },
+            })),
+            tool_choice: 'auto',
+          }
+        : {}),
+    });
+
+    // A whole recipe is a large tool call, and truncation is one of the ways
+    // it comes back unparseable — so the retry is given more room rather than
+    // simply rolling the dice again on the same budget.
+    let response: Response;
+    try {
+      response = await this.post(request(TOOL_CALL_TOKENS), signal);
+    } catch (error) {
+      if (!(error instanceof MalformedToolCallError) || signal.aborted) throw error;
+      console.warn('[llm] retrying after an unparseable tool call');
+      try {
+        response = await this.post(request(TOOL_CALL_TOKENS * 2), signal);
+      } catch (retryError) {
+        if (!(retryError instanceof MalformedToolCallError)) throw retryError;
+        // Twice is enough. Surfacing it as a provider error means the turn
+        // ends with something spoken rather than with silence.
+        throw new ProviderError(
+          'llm',
+          'The assistant could not put that together. Ask again in a moment.',
+        );
+      }
+    }
 
     const payload = (await response.json()) as {
       choices?: Array<{ message?: WireMessage }>;

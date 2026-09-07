@@ -4,7 +4,7 @@ import type { Db } from '../db/context';
 import { listMemory } from '../db/memory';
 import { getProfile, type Preferences } from '../db/profiles';
 import { markInterrupted, nextTurnIndex, recentTurns, recordTurn } from '../db/turns';
-import { isAbort } from '../errors';
+import { AppError, isAbort } from '../errors';
 import { buildMessages } from '../llm/prompt';
 import { getLlmProvider } from '../llm/provider';
 import type { ChatMessage, LlmProvider, ToolCall } from '../llm/types';
@@ -201,13 +201,27 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
       return;
     }
     console.error('[orchestrator]', error);
-    yield {
-      type: 'error',
-      message:
-        error instanceof Error && error.message
-          ? error.message
-          : 'The assistant could not answer that.',
-    };
+
+    const message =
+      error instanceof AppError && error.message
+        ? error.message
+        : 'Sorry, something went wrong there. Try me again.';
+
+    yield { type: 'error', message };
+
+    // Say it, do not just display it.
+    //
+    // The cook's hands are wet and their attention is on the pan; a red box on
+    // a screen they are not looking at is indistinguishable from the assistant
+    // having simply ignored them. A hands-free product that fails silently is
+    // broken by its own premise, so the failure gets spoken like anything else.
+    try {
+      yield* speakText(message, tts, signal, () => {
+        if (firstAudioAt === null) firstAudioAt = Date.now();
+      });
+    } catch {
+      // TTS is very likely the thing that just failed. Nothing further to try.
+    }
     return;
   } finally {
     // Reached on a thrown abort *and* on the generator being closed by the

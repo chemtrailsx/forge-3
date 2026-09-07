@@ -70,6 +70,8 @@ export class VoiceClient {
   private status: VoiceStatus = 'idle';
   private assistantSpeaking = false;
   private running = false;
+  /** The session is up; the mic may or may not be. */
+  private micOpen = false;
 
   /** Set when the last assistant turn was cut off, consumed by the next turn. */
   private pendingInterruption: InterruptionReport | null = null;
@@ -100,18 +102,38 @@ export class VoiceClient {
     return this.running;
   }
 
+  /**
+   * Playback and the microphone are separate failure domains.
+   *
+   * The session comes up first — audio out, and the poll that lets the
+   * assistant speak first — and only then is the microphone attempted. A
+   * denied mic costs you talking *to* it; it must not also cost you being told
+   * the pasta is done, which is exactly when someone whose hands are too messy
+   * to hold a phone still needs to hear it.
+   */
   async start(): Promise<void> {
     if (this.running) return;
     await this.player.init();
     await this.player.resume();
-    await this.openMicrophone();
+
     this.running = true;
-    this.setStatus('listening');
     this.startNudgePolling();
+
+    try {
+      await this.openMicrophone();
+      this.micOpen = true;
+      this.setStatus('listening');
+    } catch (error) {
+      // Rethrown so the UI can say the mic is unavailable, but the session
+      // stays up around it.
+      this.setStatus('idle');
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
     this.running = false;
+    this.micOpen = false;
     this.stopNudgePolling();
     this.turnController?.abort();
     this.turnController = null;
@@ -221,7 +243,7 @@ export class VoiceClient {
    * that they can just talk, when nothing is in fact hearing them.
    */
   private setResting(): void {
-    this.setStatus(this.running ? 'listening' : 'idle');
+    this.setStatus(this.micOpen ? 'listening' : 'idle');
   }
 
   private async openMicrophone(): Promise<void> {

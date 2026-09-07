@@ -194,7 +194,7 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
       </div>
 
       <div className="stack">
-        <TimerPanel timers={state.timers} running={state.running} />
+        <TimerPanel timers={state.timers} />
         <IngredientPanel state={state} />
       </div>
     </div>

@@ -1,5 +1,5 @@
 import type { Ingredient } from '../types';
-import { readSpokenNumber } from './spoken-numbers';
+import { readNamedFraction, readSpokenNumber } from './spoken-numbers';
 
 /**
  * Parses a spoken ingredient line into structure.
@@ -110,6 +110,28 @@ export function parseIngredient(line: string): Ingredient {
         index = spoken.next;
       }
     }
+  }
+
+  // "a quarter of a cup" — "a" reads as the number one, and the fraction that
+  // qualifies it comes next. Without this the quantity is 1 and the fraction
+  // ends up inside the ingredient's name.
+  if (quantity === 1) {
+    const fraction = readNamedFraction(tokens[index]);
+    if (fraction !== null) {
+      quantity = fraction;
+      index += 1;
+    }
+  }
+
+  // "a quarter *of* a cup", "3 cloves *of* garlic".
+  if (quantity !== null && tokens[index]?.toLowerCase() === 'of') index += 1;
+
+  // "half a teaspoon of salt" — the article sits between the quantity and its
+  // unit, and skipping it is the difference between "0.5 tsp salt" and an
+  // ingredient literally named "a teaspoon black pepper".
+  if (quantity !== null && /^(a|an)$/i.test(tokens[index] ?? '')) {
+    const following = tokens[index + 1]?.toLowerCase().replace(/\.$/, '') ?? '';
+    if (following in UNITS) index += 1;
   }
 
   const unitToken = tokens[index];

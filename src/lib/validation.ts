@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { coerceIngredient } from './cooking/parse-ingredient';
+import { inferStepTiming } from './cooking/step-timing';
 import { ValidationError } from './errors';
 
 /**
@@ -50,17 +51,18 @@ export const stepsSchema = z
   .max(60)
   .transform((entries) =>
     entries.map((entry) => {
-      if (typeof entry === 'string') {
-        return { text: entry, durationSeconds: null, attention: 'active' as const };
-      }
-      const duration = entry.durationSeconds ?? entry.duration_seconds ?? null;
+      // The instruction is the authority on how long it runs and whether the
+      // cook has to stand there — see lib/cooking/step-timing.ts for why the
+      // model's own labelling is not trusted on its own.
+      if (typeof entry === 'string') return { text: entry, ...inferStepTiming(entry) };
+
+      const stated = entry.durationSeconds ?? entry.duration_seconds ?? null;
       return {
         text: entry.text,
-        durationSeconds: duration && duration > 0 ? duration : null,
-        // A step with unattended time is passive whether or not the model
-        // remembered to say so: "simmer for forty minutes" does not need the
-        // label to be true.
-        attention: entry.attention ?? (duration && duration > 0 ? 'passive' : 'active'),
+        ...inferStepTiming(entry.text, {
+          durationSeconds: stated && stated > 0 ? stated : null,
+          ...(entry.attention ? { attention: entry.attention } : {}),
+        }),
       };
     }),
   );

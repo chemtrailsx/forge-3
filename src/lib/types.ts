@@ -128,12 +128,18 @@ export type CookingStateSnapshot = {
   baseServings: number;
   ingredients: Ingredient[];
   substitutions: Substitution[];
-  timers: TimerView[];
   /**
-   * Unattended work happening right now — the pasta boiling while the cook
-   * chops. Derived from running `step` timers, so it survives a reload.
+   * Everything counting down right now — the pasta boiling while the cook
+   * chops, and any timer they set themselves.
+   *
+   * One list rather than two. The distinction between "the assistant started
+   * this when you reached a passive step" and "you asked for this" matters for
+   * how a reminder is *phrased*, and for nothing else: either way it is work
+   * happening that nobody is watching. Splitting them meant a timer the cook
+   * asked for showed up nowhere, which is how it was first built and how it
+   * was wrong.
    */
-  running: TimerView[];
+  timers: TimerView[];
   corrections: string[];
   /** True before a dish has been chosen, so the UI can invite one. */
   awaitingRecipe: boolean;

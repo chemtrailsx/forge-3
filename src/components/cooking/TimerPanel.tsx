@@ -8,14 +8,14 @@ import type { TimerView } from '@/lib/types';
  * sent. Ticking a local counter would drift; recomputing from the absolute end
  * time each second cannot.
  *
- * Two lists, because they answer different questions. `timers` are bells the
- * cook set. `running` is work the assistant is watching on their behalf — the
- * pasta that went in while they chop — and seeing it is what makes the
- * automatic reminder feel expected rather than startling.
+ * One list, not two. Whether the assistant started the countdown or the cook
+ * asked for it, the answer to "what is happening right now that I am not
+ * watching" is the same — and seeing it is what makes the automatic reminder
+ * feel expected rather than startling.
  */
-export function TimerPanel({ timers, running }: { timers: TimerView[]; running: TimerView[] }) {
+export function TimerPanel({ timers }: { timers: TimerView[] }) {
   const [, setTick] = useState(0);
-  const total = timers.length + running.length;
+  const total = timers.length;
 
   useEffect(() => {
     if (total === 0) return;
@@ -36,27 +36,12 @@ export function TimerPanel({ timers, running }: { timers: TimerView[]; running: 
 
   return (
     <section className="card">
-      {running.length > 0 ? (
-        <>
-          <h3>Cooking now</h3>
-          <ul className="plain">
-            {running.map((timer) => (
-              <TimerRow key={timer.id} timer={timer} />
-            ))}
-          </ul>
-        </>
-      ) : null}
-
-      {timers.length > 0 ? (
-        <>
-          <h3 style={{ marginTop: running.length > 0 ? 16 : 0 }}>Timers</h3>
-          <ul className="plain">
-            {timers.map((timer) => (
-              <TimerRow key={timer.id} timer={timer} />
-            ))}
-          </ul>
-        </>
-      ) : null}
+      <h3>On the go</h3>
+      <ul className="plain">
+        {timers.map((timer) => (
+          <TimerRow key={timer.id} timer={timer} />
+        ))}
+      </ul>
     </section>
   );
 }

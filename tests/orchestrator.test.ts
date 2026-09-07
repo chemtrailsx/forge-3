@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runTurn } from '@/lib/voice/orchestrator';
+import { ProviderError } from '@/lib/errors';
+import type { LlmProvider } from '@/lib/llm/types';
 import type { TurnEvent } from '@/lib/voice/events';
 import { describeState } from '@/lib/llm/prompt';
 import { loadCookingState } from '@/lib/cooking/state';
@@ -72,6 +74,35 @@ describe('a normal turn', () => {
     const end = events.find((event) => event.type === 'turn.end');
     expect(end?.type === 'turn.end' ? end.metrics.timeToFirstAudioMs : null).not.toBeNull();
     expect(end?.type === 'turn.end' ? end.metrics.totalMs : -1).toBeGreaterThanOrEqual(0);
+  });
+
+  it('speaks its failures rather than only displaying them', async () => {
+    const { db } = makeDb(ALICE, seedTables());
+    const tts = new FakeTts();
+
+    // A provider that dies the way the live one has: a tool call the model
+    // could not write as valid JSON.
+    const llm: LlmProvider = {
+      model: 'broken',
+      complete: async () => {
+        throw new ProviderError('llm', 'The assistant could not put that together.');
+      },
+      stream: async function* () {
+        throw new Error('should not be reached');
+      },
+    };
+
+    const events = await collect(
+      runTurn({ db, sessionId: ALICE_SESSION, utterance: 'make me pasta', signal: signal(), llm, tts }),
+    );
+
+    const error = events.find((event) => event.type === 'error');
+    expect(error?.type === 'error' ? error.message : '').toContain('could not put that together');
+
+    // The cook's hands are wet and they are not looking at the screen. A red
+    // box they never see is the same as being ignored.
+    expect(tts.spoken.length).toBeGreaterThan(0);
+    expect(events.some((event) => event.type === 'audio')).toBe(true);
   });
 
   it('refuses to run against a session belonging to someone else', async () => {
@@ -180,7 +211,7 @@ describe('context sent to the model', () => {
     expect(description).toContain('Cooking for 4 people');
     expect(description).toContain('butter replaced by olive oil');
     expect(description).toContain('I already salted the water.');
-    expect(description).toContain('Running timers: none.');
+    expect(description).toContain('Nothing on the heat right now.');
   });
 });
 
