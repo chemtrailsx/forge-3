@@ -1,0 +1,21 @@
+# What not to upload to a Vercel build.
+#
+# Vercel skips node_modules and .next on its own, but not `.next-build` — the
+# local production output directory this project uses so that `next build` does
+# not delete the routes manifest out from under a running `next dev` (see
+# next.config.mjs). It is a hundred megabytes of build artefact that the build
+# would only overwrite, and uploading it is slow enough to time out.
+.next
+.next-build
+node_modules
+
+# Never leaves this machine. Production configuration lives in the project's
+# environment variables, not in an uploaded file.
+.env
+.env.local
+.env.*.local
+
+# Not part of the deployed application.
+tests
+scripts/verify-*.ts
+coverage
