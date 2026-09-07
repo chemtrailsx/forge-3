@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Cooking Companion — Solution Architecture</title>
+<style>
+  @page { size: A4; margin: 11mm 12mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --muted: #5c5c5c;
+    --rule: #d8d4cd;
+    --accent: #9a3412;
+    --wash: #faf8f5;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Charter", "Iowan Old Style", Georgia, "Times New Roman", serif;
+    font-size: 8.1pt;
+    line-height: 1.42;
+    color: var(--ink);
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  header {
+    border-bottom: 1.6pt solid var(--ink);
+    padding-bottom: 4pt;
+    margin-bottom: 7pt;
+  }
+  h1 {
+    font-size: 15pt;
+    margin: 0 0 1pt;
+    letter-spacing: -0.2pt;
+  }
+  .tagline { color: var(--muted); font-style: italic; }
+  .meta {
+    float: right;
+    text-align: right;
+    font-size: 6.9pt;
+    color: var(--muted);
+    line-height: 1.5;
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+
+  h2 {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 7.4pt;
+    text-transform: uppercase;
+    letter-spacing: 0.7pt;
+    color: var(--accent);
+    margin: 0 0 3pt;
+    padding-bottom: 1.5pt;
+    border-bottom: 0.5pt solid var(--rule);
+  }
+
+  section { margin-bottom: 7pt; }
+  p { margin: 0 0 3.5pt; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 13pt; }
+  .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 11pt; }
+
+  ul { margin: 0; padding-left: 10pt; }
+  li { margin-bottom: 2pt; }
+  li::marker { color: var(--accent); }
+
+  code, .mono {
+    font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+    font-size: 7.1pt;
+  }
+  strong { font-weight: 600; }
+
+  /* Pipeline diagram */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 3pt;
+    margin: 4pt 0 5pt;
+  }
+  .stage {
+    flex: 1;
+    background: var(--wash);
+    border: 0.5pt solid var(--rule);
+    border-left: 1.8pt solid var(--accent);
+    padding: 3pt 4pt;
+    border-radius: 1.5pt;
+  }
+  .stage b {
+    display: block;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 6.6pt;
+    text-transform: uppercase;
+    letter-spacing: 0.4pt;
+    margin-bottom: 1pt;
+  }
+  .stage span {
+    display: block;
+    font-size: 6.9pt;
+    color: var(--muted);
+    line-height: 1.32;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.1pt; }
+  th, td { text-align: left; padding: 1.6pt 4pt 1.6pt 0; vertical-align: top; }
+  th {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 6.6pt;
+    text-transform: uppercase;
+    letter-spacing: 0.4pt;
+    color: var(--muted);
+    border-bottom: 0.5pt solid var(--rule);
+  }
+  td { border-bottom: 0.4pt solid #eeebe6; line-height: 1.32; }
+  tr:last-child td { border-bottom: none; }
+  .num { font-family: "Cascadia Mono", Consolas, monospace; font-size: 7pt; white-space: nowrap; }
+  .gain { color: var(--accent); font-weight: 600; }
+
+  footer {
+    margin-top: 6pt;
+    padding-top: 3.5pt;
+    border-top: 0.5pt solid var(--rule);
+    font-size: 6.8pt;
+    color: var(--muted);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+
+<header>
+  <div class="meta">
+    Next.js 16 · React 19 · TypeScript (strict)<br>
+    Supabase Postgres + Auth · Vercel<br>
+    Groq (LLM + Whisper) · Rime (TTS)
+  </div>
+  <h1>Cooking Companion</h1>
+  <div class="tagline">Solution architecture — a hands-free cooking assistant you talk to while your hands are busy.</div>
+</header>
+
+<section>
+  <h2>The problem, and the constraint that shapes everything</h2>
+  <p>A cook has wet hands, a pan on the heat, and no attention to spare for a screen. So the product is <strong>conversation, not documents</strong>: you open it, say what you want to make, and it plans the recipe, walks you through it, tracks what is already on the stove, and reminds you before the pasta boils over. Nothing is uploaded and nothing is read.</p>
+  <p>That constraint decides the architecture. If the assistant answers a sentence nobody said, talks over a correction, or takes three seconds to react, the product has failed in a way no feature can compensate for. <strong>Latency, interruption and false triggers are treated as correctness problems</strong> — each has tests, not just tuning.</p>
+</section>
+
+<section>
+  <h2>The turn pipeline</h2>
+  <div class="flow">
+    <div class="stage"><b>Capture</b><span>Mic → AudioWorklet. A pure VAD state machine reads RMS windows; a 400 ms pre-roll ring buffer keeps the first word the detector needed to become confident.</span></div>
+    <div class="stage"><b>Endpoint</b><span>A pause at 420 ms starts transcription <em>inside</em> the 1100 ms hangover. If speech resumes, the work is discarded; if not, it was the whole utterance.</span></div>
+    <div class="stage"><b>Understand</b><span>Whisper → silence-artefact filter. Groq model streams the first pass, choosing among 11 tools that read and write the user's own data.</span></div>
+    <div class="stage"><b>Speak</b><span>Rime synthesises each clause as it completes. One SSE stream carries events <em>and</em> PCM audio; a jitter-buffered worklet plays it.</span></div>
+  </div>
+  <p><strong>Audio rides the same request as the events.</strong> That is the load-bearing decision: a barge-in becomes a single <code>fetch</code> abort, which propagates to Rime, the model and any in-flight tool at once. Split across two requests, one of them survives to talk over the user's correction.</p>
+</section>
+
+<div class="cols">
+  <section>
+    <h2>Interruption, and knowing what was heard</h2>
+    <p>The player reports samples rendered per speech context; Rime returns word timestamps. Multiplying the two gives the <strong>heard-transcript ledger</strong> — what actually reached the room before the cook cut in.</p>
+    <p>That ledger is written over the interrupted turn <em>before</em> the next turn's history is read, so the model never treats a sentence nobody heard as context for the correction it caused. The interrupted path is the one place the pipeline stays deliberately sequential.</p>
+  </section>
+
+  <section>
+    <h2>Isolation as a property, not a rule</h2>
+    <p>Identity enters the system in exactly one place, from the verified session cookie. No route, tool or query accepts a user id from the outside, so "never trust a <code>user_id</code> from the client" is structural rather than remembered.</p>
+    <p>Postgres RLS is <strong>enabled and forced</strong> on every user table (8 policies), the server client carries the user's own JWT so the database applies the same rules, and every read <em>also</em> filters on <code>user_id</code> — three independent layers, each tested.</p>
+  </section>
+</div>
+
+<section>
+  <h2>Latency: measured, not asserted</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Where the wait was</th><th>Before</th><th>After</th></tr>
+        <tr><td>Database work before the model is called</td><td class="num">~900 ms</td><td class="num gain">~300 ms</td></tr>
+        <tr><td>Session verification per API call</td><td class="num">300 ms</td><td class="num gain">152 ms</td></tr>
+        <tr><td>Request → first audio (median)</td><td class="num">2.9–3.4 s</td><td class="num gain">2.76 s</td></tr>
+        <tr><td>Hangover hidden behind transcription</td><td class="num">0 ms</td><td class="num gain">680 ms</td></tr>
+      </table>
+    </div>
+    <div>
+      <p>The prologue to a turn was six database round trips in a chain; only one dependency was real. They now run as one wave, and the user's line is written without being awaited. The first model pass is streamed and spoken clause by clause instead of awaited whole.</p>
+      <p>A test double can be given an artificial round-trip cost, so <strong>re-chaining those queries fails the suite</strong> rather than quietly costing half a second. Every figure above was measured against live services and verified failing on the previous code first.</p>
+    </div>
+  </div>
+</section>
+
+<div class="cols-3">
+  <section>
+    <h2>Failure is designed for</h2>
+    <ul>
+      <li><strong>Rate limits:</strong> a short limit is waited out; a long one is answered on a second model, metered separately. Both exhausted → a spoken sentence a cook can act on, never a status code.</li>
+      <li><strong>Silence artefacts:</strong> transcribers return "Thank you." for noise. Energy gating, a duplicate-model check and a self-echo filter cut every link in that feedback loop.</li>
+      <li><strong>Errors are spoken,</strong> not just displayed. A hands-free product that fails silently looks identical to one that ignored you.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Shape of the codebase</h2>
+    <ul>
+      <li><strong>84 TypeScript modules</strong>, strict mode with <code>noUncheckedIndexedAccess</code>; no file does two jobs.</li>
+      <li><strong>7 runtime dependencies.</strong> The WAV encoder, jitter buffer and VAD are ours because a package would have cost more than it saved.</li>
+      <li>The turn is an <strong>async generator</strong>, so the transport is not baked in: the route serialises it as SSE and tests consume the identical generator with fake providers.</li>
+      <li>Provider-specific code sits behind one seam each — swapping a TTS or LLM vendor touches one file.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Verification</h2>
+    <ul>
+      <li><strong>232 tests across 17 files</strong>, including an in-memory PostgREST double that enforces RLS the way Postgres does.</li>
+      <li>Covered: cross-user isolation, memory, all tools, cooking state, barge-in, filler timing, state recovery after an interruption, and latency budgets.</li>
+      <li>A preflight command checks every live provider — including that the <em>fallback</em> model is actually served by the account, a failure that is otherwise invisible until the worst moment.</li>
+      <li>Deployed on Vercel; anonymous callers are refused by every API route in production.</li>
+    </ul>
+  </section>
+</div>
+
+<footer>
+  <span>Voice-first cooking assistant · free-tier providers only · no secrets in client code</span>
+  <span>Architecture brief — 1 of 1</span>
+</footer>
