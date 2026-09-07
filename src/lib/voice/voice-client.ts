@@ -154,6 +154,12 @@ export class VoiceClient {
     if (!this.running || this.nudgeInFlight || this.turnController) return;
     if (this.assistantSpeaking || this.vad.isSpeaking) return;
 
+    // `turnController` is not set until the turn actually starts, which leaves
+    // a gap: the cook has stopped talking and the utterance is still being
+    // transcribed. Interrupting there would mean speaking over the answer they
+    // are visibly waiting for — the worst-timed interruption available.
+    if (this.status === 'transcribing' || this.status === 'thinking') return;
+
     this.nudgeInFlight = true;
     try {
       const response = await fetch('/api/nudge', {
