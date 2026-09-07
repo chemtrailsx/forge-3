@@ -49,6 +49,18 @@ class PcmPlayer extends AudioWorkletProcessor {
       const message = event.data;
       if (message.type === 'push') {
         this.queue.push({ contextId: message.contextId, data: message.data });
+      } else if (message.type === 'flush') {
+        /*
+         * No more audio is coming for this turn, so play out whatever is left
+         * even if it never reached the cushion.
+         *
+         * Without this, a trailing clause shorter than the buffer — "Got it."
+         * — waits forever for audio that will never arrive and is silently
+         * dropped, which sounds exactly like the assistant stopping
+         * mid-response. The queue emptying re-arms priming for the next turn,
+         * so the cushion still applies where it matters.
+         */
+        this.priming = false;
       } else if (message.type === 'clear') {
         this.queue = [];
         this.offset = 0;

@@ -59,6 +59,9 @@ function harness() {
     clear() {
       player.port.onmessage({ data: { type: 'clear' } });
     },
+    flush() {
+      player.port.onmessage({ data: { type: 'flush' } });
+    },
     /** Renders one quantum; true if any audio came out. */
     quantum(): boolean {
       const channel = output[0]!;
@@ -123,6 +126,51 @@ describe('jitter buffer', () => {
 
     player.push(MIN_BUFFER);
     expect(player.quantum()).toBe(true);
+  });
+
+  /**
+   * Reported from a real session: "it stopped narrating one response midway".
+   *
+   * A trailing clause shorter than the cushion — "Got it." — waits for audio
+   * that will never arrive, and is dropped in silence. The end of a turn has
+   * to tell the player that nothing more is coming.
+   */
+  it('drops a short trailing clause without a flush — the reported bug', () => {
+    const player = harness();
+    player.push(MIN_BUFFER * 2);
+    while (player.quantum()) {
+      /* play the long clause out */
+    }
+
+    player.push(Math.round(MIN_BUFFER / 2)); // ~90 ms, under the cushion
+    let heard = false;
+    for (let i = 0; i < 200; i += 1) heard = player.quantum() || heard;
+    expect(heard).toBe(false);
+  });
+
+  it('plays that clause once told no more audio is coming', () => {
+    const player = harness();
+    player.push(MIN_BUFFER * 2);
+    while (player.quantum()) {
+      /* play the long clause out */
+    }
+
+    player.push(Math.round(MIN_BUFFER / 2));
+    player.flush();
+    expect(player.quantum()).toBe(true);
+  });
+
+  it('re-arms the cushion for the next turn after a flush drains', () => {
+    const player = harness();
+    player.push(1000);
+    player.flush();
+    while (player.quantum()) {
+      /* drain */
+    }
+
+    // The next burst still gets the benefit of the jitter buffer.
+    player.push(500);
+    expect(player.quantum()).toBe(false);
   });
 
   it('drops everything on clear, which is what barge-in depends on', () => {

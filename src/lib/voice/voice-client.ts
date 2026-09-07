@@ -57,6 +57,15 @@ const VAD_WINDOW_MS = 20;
  */
 const NUDGE_POLL_MS = 5000;
 
+/**
+ * How long after the speaker falls silent the assistant still counts as
+ * holding the floor.
+ *
+ * Long enough to bridge a clause boundary, short enough that someone
+ * answering the moment it stops is heard immediately.
+ */
+const SPEECH_HOLDOFF_MS = 700;
+
 export class VoiceClient {
   private player: PcmPlayer;
   private vad = new VoiceActivityDetector(DEFAULT_VAD);
@@ -79,6 +88,16 @@ export class VoiceClient {
   private backchannelCount = 0;
   private lastBackchannelAt: number | null = null;
   private speechStartedAt = 0;
+  /**
+   * When the speaker last fell silent.
+   *
+   * `assistantSpeaking` flickers false in the gaps between clauses — and more
+   * often since the jitter buffer, which re-primes whenever the queue empties.
+   * Those gaps are precisely when the next clause is about to play, so letting
+   * the microphone threshold drop back to normal there invites the assistant
+   * to trigger on its own voice and start a turn nobody asked for.
+   */
+  private lastDrainedAt: number | null = null;
   private nudgeTimer: number | null = null;
   private nudgeInFlight = false;
   private lastNudgeAt: number | null = null;
@@ -92,6 +111,7 @@ export class VoiceClient {
     this.player = new PcmPlayer(sampleRate, {
       onPlayingChange: (playing) => {
         this.assistantSpeaking = playing;
+        if (!playing) this.lastDrainedAt = performance.now();
         if (!playing && this.status === 'speaking') this.setResting();
         else if (playing) this.setStatus('speaking');
       },
@@ -221,6 +241,7 @@ export class VoiceClient {
         profile: 'precise',
       });
       this.player.enqueueBase64(body.speak.contextId, body.speak.pcm);
+      this.player.flush();
     } catch {
       // A missed poll is a missed reminder, and the next one is seconds away.
     } finally {
@@ -283,13 +304,29 @@ export class VoiceClient {
     this.meter = meter;
   }
 
+  /**
+   * Whether the assistant should be treated as holding the floor.
+   *
+   * Broader than "audio is playing right now": a turn still streaming, or a
+   * clause boundary a moment ago, both mean more speech is imminent.
+   */
+  private assistantActive(): boolean {
+    if (this.assistantSpeaking || this.turnController !== null) return true;
+    return (
+      this.lastDrainedAt !== null &&
+      performance.now() - this.lastDrainedAt < SPEECH_HOLDOFF_MS
+    );
+  }
+
   private async onLevel(rms: number): Promise<void> {
     if (!this.running) return;
     this.events.onLevel(rms, this.vad.floor);
 
     // The threshold rises while the assistant is talking, so its own voice
-    // coming back through the microphone does not read as a new turn.
-    const event = this.vad.push(rms, VAD_WINDOW_MS, this.assistantSpeaking);
+    // coming back through the microphone does not read as a new turn — held
+    // across the brief gaps between clauses, which are exactly the moments the
+    // next clause is about to arrive.
+    const event = this.vad.push(rms, VAD_WINDOW_MS, this.assistantActive());
 
     if (event === 'speech-start') {
       this.speechStartedAt = performance.now();
@@ -463,6 +500,10 @@ export class VoiceClient {
       }
     } finally {
       if (this.turnController === controller) this.turnController = null;
+      // The stream is over, so nothing more will arrive for this turn. Tell
+      // the player to drain rather than sit on a trailing clause that is
+      // shorter than its cushion.
+      this.player.flush();
       if (!this.assistantSpeaking) this.setResting();
     }
   }

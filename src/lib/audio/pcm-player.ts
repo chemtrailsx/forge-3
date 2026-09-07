@@ -113,6 +113,17 @@ export class PcmPlayer {
     });
   }
 
+  /**
+   * Tell the player no more audio is coming, so it plays out the remainder.
+   *
+   * Called when a turn's stream ends. The jitter buffer otherwise holds back
+   * anything shorter than its cushion waiting for audio that will never
+   * arrive, which drops short trailing clauses entirely.
+   */
+  flush(): void {
+    this.node?.port.postMessage({ type: 'flush' });
+  }
+
   /** Samples rendered per context, as of the last report from the audio thread. */
   progress(): Record<string, number> {
     return this.lastProgress;
