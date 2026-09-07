@@ -14,12 +14,26 @@ import type { TimerView } from '@/lib/types';
  * feel expected rather than startling.
  */
 export function TimerPanel({ timers }: { timers: TimerView[] }) {
-  const [, setTick] = useState(0);
+  /**
+   * The clock is read in an effect, never during render.
+   *
+   * Reading `Date.now()` while rendering is impure — the same props produce a
+   * different tree each call — and it is a hydration hazard besides: the
+   * server renders one instant and the browser another, so the first paint
+   * disagrees with the markup it is replacing. Holding "now" in state makes
+   * every row a pure function of its props and gives all of them the same
+   * instant to count from.
+   */
+  const [now, setNow] = useState<number | null>(null);
   const total = timers.length;
 
   useEffect(() => {
     if (total === 0) return;
-    const id = setInterval(() => setTick((n) => n + 1), 500);
+    // Only subscribe. Seeding the value synchronously here would be a
+    // cascading render for no gain: until the first tick, each row falls back
+    // to the remaining time the server already computed, which is at most half
+    // a second stale.
+    const id = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(id);
   }, [total]);
 
@@ -39,16 +53,20 @@ export function TimerPanel({ timers }: { timers: TimerView[] }) {
       <h3>On the go</h3>
       <ul className="plain">
         {timers.map((timer) => (
-          <TimerRow key={timer.id} timer={timer} />
+          <TimerRow key={timer.id} timer={timer} now={now} />
         ))}
       </ul>
     </section>
   );
 }
 
-function TimerRow({ timer }: { timer: TimerView }) {
+function TimerRow({ timer, now }: { timer: TimerView; now: number | null }) {
   const endsAt = new Date(timer.startedAt).getTime() + timer.durationMs;
-  const remaining = Math.max(0, endsAt - Date.now());
+
+  // `now` is null for the single frame before the first effect runs. Falling
+  // back to the value the server already computed keeps that frame correct
+  // rather than blank or briefly wrong.
+  const remaining = now === null ? timer.remainingMs : Math.max(0, endsAt - now);
 
   return (
     <li>

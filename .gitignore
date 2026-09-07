@@ -30,3 +30,6 @@ npm-debug.log*
 
 # production build output (see distDir in next.config.mjs)
 .next-build/
+
+.vercel
+.env*
