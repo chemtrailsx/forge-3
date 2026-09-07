@@ -269,7 +269,7 @@ Set `TOOL_DELAY_MS=3000` in `.env.local` first, so the filler has a gap to cover
 npm test          # vitest — no network or API keys needed
 npm run typecheck # tsc --noEmit
 npm run lint      # eslint
-npm run build     # next build
+npm run build     # next build, into .next-build
 
 npm run preflight    # exercises every provider against its live API
 npm run verify:rls   # proves user isolation against the real database
@@ -321,6 +321,17 @@ tool calls — confirming: a filler spoken while a tool was still running, ingre
 2→6 servings in the panel, a timer confirmation automatically taking the slower `precise`
 profile, and a barge-in that stopped audio in **11 ms** and left `heard_text` cut exactly where
 playback stopped, with the reply acknowledging the correction rather than restarting.
+
+### A note on `npm run build`
+
+The build writes to `.next-build`, not `.next`. Sharing one directory means a
+build silently deletes the running dev server's `routes-manifest.json`, and the
+dev server then 500s on every route with an ENOENT that says nothing about the
+build that caused it. The split is in `distDir` in `next.config.mjs` and needs
+no extra tooling, since `next dev` and `next build` already differ on NODE_ENV.
+
+If a dev server ever does start throwing `ENOENT ... routes-manifest.json` or
+`Cannot find module './139.js'`, that is this failure: restart it.
 
 ## Known limitations
 
