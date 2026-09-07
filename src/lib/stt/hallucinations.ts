@@ -69,11 +69,46 @@ export function normaliseTranscript(text: string): string {
  * Deliberately conservative about length: a long transcript is real speech
  * even if it happens to start with "thank you".
  */
-export function isLikelyHallucination(text: string): boolean {
+/**
+ * True when a transcript is mostly just the priming prompt read back.
+ *
+ * A domain hint improves recognition of ingredient names, but handed silence
+ * Whisper does not only invent a pleasantry — it regurgitates the prompt it
+ * was primed with. That is where "Ingredients, quantities, and quantities."
+ * came from: it is this application's own hint, spoken back at it, and it is
+ * far more convincing than "Thank you." because it is perfectly on topic.
+ *
+ * Only short transcripts are judged this way. Someone really can ask about
+ * ingredients and quantities, but they will say more than the hint does.
+ */
+export function echoesPrompt(text: string, prompt: string): boolean {
+  // Split on anything that is not a letter or digit: internal commas and full
+  // stops otherwise leave "quantities," which never matches "quantities".
+  const tokenise = (value: string) =>
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+
+  const words = tokenise(text);
+  if (words.length === 0 || words.length > 12) return false;
+
+  const promptWords = new Set(tokenise(prompt));
+  const filler = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'to', 'for', 'is', 'are']);
+
+  const content = words.filter((word) => !filler.has(word));
+  if (content.length === 0) return true;
+
+  const fromPrompt = content.filter((word) => promptWords.has(word)).length;
+  return fromPrompt / content.length >= 0.8;
+}
+
+export function isLikelyHallucination(text: string, prompt?: string): boolean {
   const raw = text.trim();
   if (!raw) return true;
   if (ONLY_PUNCTUATION.test(raw)) return true;
   if (ANNOTATION.test(raw)) return true;
+  if (prompt && echoesPrompt(raw, prompt)) return true;
 
   const normalised = normaliseTranscript(raw);
   if (!normalised) return true;

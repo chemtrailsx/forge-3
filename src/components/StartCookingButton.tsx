@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { detectRegion } from '@/lib/region';
 
 /**
  * Creates a cooking session, then hands over to the voice screen.
@@ -30,7 +31,7 @@ export function StartCookingButton({
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId: recipeId ?? null }),
+        body: JSON.stringify({ recipeId: recipeId ?? null, region: detectRegion() }),
       });
       const body = (await response.json()) as
         | { session: { id: string } }

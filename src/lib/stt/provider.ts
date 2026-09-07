@@ -15,6 +15,13 @@ export interface SttProvider {
   transcribe(audio: Blob, signal: AbortSignal): Promise<string>;
 }
 
+/**
+ * Recognition hint. Kept short: every word in it is a word the model may hand
+ * back verbatim when there is nothing to transcribe.
+ */
+const DOMAIN_PROMPT =
+  'Cooking conversation. Ingredients, quantities, grams, millilitres, teaspoons, tablespoons, timers, oven temperatures.';
+
 /** 25 MB is the common provider ceiling; an utterance is orders below it. */
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
@@ -33,12 +40,11 @@ export class OpenAiCompatibleStt implements SttProvider {
     form.append('file', audio, fileNameFor(audio.type));
     form.append('model', this.config.model);
     form.append('response_format', 'json');
-    // A domain hint measurably improves recognition of ingredient names and
-    // fractional quantities, which is most of what gets said here.
-    form.append(
-      'prompt',
-      'Cooking conversation. Ingredients, quantities, grams, millilitres, teaspoons, tablespoons, timers, oven temperatures.',
-    );
+    // A domain hint improves recognition of ingredient names and fractional
+    // quantities, which is most of what gets said here. It is also what the
+    // model reads back when handed silence, so the same text is passed to the
+    // filter below to be recognised on the way out.
+    form.append('prompt', DOMAIN_PROMPT);
 
     const response = await fetch(this.config.endpoint, {
       method: 'POST',
@@ -62,7 +68,7 @@ export class OpenAiCompatibleStt implements SttProvider {
 
     // Whisper answers silence with speech. Returning an empty string here
     // means the caller treats it as "nothing was said", which is the truth.
-    if (isLikelyHallucination(text)) {
+    if (isLikelyHallucination(text, DOMAIN_PROMPT)) {
       console.warn(`[stt] discarded a likely silence artefact: ${JSON.stringify(text)}`);
       return '';
     }

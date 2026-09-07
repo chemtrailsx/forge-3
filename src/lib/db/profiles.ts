@@ -13,6 +13,22 @@ export const preferencesSchema = z
     spiceLevel: z.enum(['mild', 'medium', 'hot']).optional(),
     dietary: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
     units: z.enum(['metric', 'imperial']).optional(),
+    /**
+     * ISO 3166-1 alpha-2 country code.
+     *
+     * Where the cook is decides what they can actually buy, what a dish is
+     * called, and which measurements mean anything to them. Without it the
+     * model answers from the centre of gravity of its training data — which is
+     * how "what coffee should I buy" comes back recommending roasters that do
+     * not sell in the country the cook is standing in.
+     */
+    region: z
+      .string()
+      .trim()
+      .length(2)
+      .regex(/^[A-Za-z]{2}$/)
+      .transform((code) => code.toUpperCase())
+      .optional(),
   })
   .default({});
 

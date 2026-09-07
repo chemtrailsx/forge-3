@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { dbFor } from '@/lib/db/context';
 import { getRecipe } from '@/lib/db/recipes';
 import { createSession, listSessions } from '@/lib/db/sessions';
-import { getProfile } from '@/lib/db/profiles';
+import { getProfile, updatePreferences } from '@/lib/db/profiles';
 import { NotFoundError, toErrorResponse } from '@/lib/errors';
 import { parseOrThrow } from '@/lib/validation';
 
@@ -18,6 +18,18 @@ export const dynamic = 'force-dynamic';
 const createSchema = z.object({
   recipeId: z.string().uuid().nullable().optional(),
   servings: z.number().int().min(1).max(50).optional(),
+  /**
+   * Where the browser thinks the cook is, as an ISO country code.
+   *
+   * Recorded once, on the first session that reports it, and never
+   * overwritten — a stated preference beats a guess from a locale, and someone
+   * travelling should not have their kitchen relocated by an airport wifi.
+   */
+  region: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2}$/)
+    .optional(),
 });
 
 export async function GET(): Promise<Response> {
@@ -39,6 +51,12 @@ export async function POST(request: Request): Promise<Response> {
     // "I usually cook for four" applies without being restated every time.
     const profile = await getProfile(db);
     const servings = body.servings ?? profile?.preferences.defaultServings;
+
+    // Learned silently on first use rather than asked for. Only filled if
+    // absent, so anything the cook has actually told us wins.
+    if (body.region && !profile?.preferences.region) {
+      await updatePreferences(db, { region: body.region.toUpperCase() });
+    }
 
     if (!body.recipeId) {
       // An empty session. The cook says what they want and plan_recipe writes

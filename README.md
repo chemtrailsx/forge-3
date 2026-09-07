@@ -350,6 +350,11 @@ If a dev server ever does start throwing `ENOENT ... routes-manifest.json` or
   poor AEC, a headset is still the answer.
 - **Backchannels are timing-based, not semantic.** The policy is deliberately conservative
   (3.5 s of speech, 9 s gap, two per turn) rather than trying to detect a natural pause.
+- **Region is a guess until you correct it.** It is read from the browser's timezone, falling back
+  to the locale, and only recorded if nothing is on file — so it is right for most people and never
+  overwrites something you actually said. Say "I'm in India" and it is saved as memory, which wins.
+  The assistant is told not to name a brand it cannot vouch for the availability of, so a wrong
+  region degrades to a vaguer answer rather than a confidently useless one.
 - **No semantic memory retrieval yet.** Selection is lexical. `user_memory` is ready for a
   `pgvector` `embedding` column when the corpus outgrows term overlap.
 - **The heard-transcript ledger is exact only on the streaming transport.** `ws3` gives word

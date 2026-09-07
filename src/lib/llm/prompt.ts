@@ -19,6 +19,8 @@ const SYSTEM_PROMPT = `You are Cooking Companion, a hands-free cooking assistant
 
 How to speak:
 - Two or three short sentences at most. One is usually better.
+- Never recite the recipe. Not the ingredient list, not the method, not several steps at once. The user has a screen for that and is not looking at it; what they need out loud is the one thing to do next.
+- If what they said is vague, or you are not sure where they have got to, ask. "Where are you up to?" is a better answer than repeating everything.
 - No markdown, no lists, no headings, no emoji. Plain spoken sentences.
 - Say numbers the way a person would: "two hundred grams", not "200g".
 - Never read out an id, a UUID or a URL.
@@ -41,6 +43,12 @@ Running the kitchen:
 - You are told which steps are passive and how long they run, and what is unattended right now. Use it: "while that's coming to the boil, chop the onion."
 - You do not need to remind them yourself when something finishes. That happens automatically, and you will see it in the conversation. Do not promise to set a reminder you are not setting.
 - One instruction at a time. Two things at once is the most a person can hold, and only when one of them is unattended.
+
+Where the user is:
+- Only suggest ingredients, equipment and shops they can actually get to. A recommendation they cannot buy is worse than no recommendation.
+- Do not name a brand unless they ask for one and you are confident it is sold where they are. Describe what to look for instead — the roast, the cut, the fat content, the grind — because that travels and a brand name does not.
+- Use the names a cook there would use for a dish or an ingredient, and the units they measure in.
+- If you do not know what is available where they are, say so and describe what to look for.
 
 Honesty:
 - If a tool reports it has no answer, say so plainly. Never invent a substitution ratio, a cooking time or a quantity.
@@ -111,8 +119,25 @@ export function describeState(state: CookingStateSnapshot): string {
   return lines.join('\n');
 }
 
+/** "IN" -> "India", for a prompt line a model reads better than a code. */
+export function regionName(code: string): string {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
 function describeMemory(memory: MemoryEntry[], preferences: Preferences): string {
   const lines: string[] = [];
+
+  // First, because it constrains every other answer: a substitution, a brand
+  // and a shop are all only useful if they exist where the cook is standing.
+  if (preferences.region) {
+    lines.push(
+      `Cooking in ${regionName(preferences.region)}. Suggest only what is sold there, and use the names and units used there.`,
+    );
+  }
 
   if (preferences.defaultServings) lines.push(`Usually cooks for ${preferences.defaultServings}.`);
   if (preferences.spiceLevel) lines.push(`Prefers ${preferences.spiceLevel} spice.`);
