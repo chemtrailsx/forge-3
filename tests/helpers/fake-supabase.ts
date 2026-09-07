@@ -67,6 +67,15 @@ export function createFakeSupabase(options: {
   tables: Tables;
   /** The authenticated user. Rows owned by anyone else are invisible. */
   rlsUserId?: string;
+  /**
+   * Artificial round-trip time for every query.
+   *
+   * The real database is in another region; a query costs more than the
+   * microseconds this fake takes. Tests that care about how many round trips
+   * sit in front of the first spoken word set this so chaining what could run
+   * concurrently shows up as elapsed time instead of hiding.
+   */
+  latencyMs?: number;
 }): FakeSupabase {
   // Deliberately the caller's object, not a copy: a test asserts on the same
   // store the code under test wrote to, and two clients can share one store to
@@ -74,6 +83,7 @@ export function createFakeSupabase(options: {
   const tables: Tables = options.tables;
   const calls: RecordedQuery[] = [];
   const rlsUserId = options.rlsUserId;
+  const latencyMs = options.latencyMs ?? 0;
 
   let idCounter = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++idCounter).padStart(12, '0')}`;
@@ -250,7 +260,13 @@ export function createFakeSupabase(options: {
         | null,
       onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
     ): PromiseLike<TResult1 | TResult2> {
-      return Promise.resolve(this.run()).then(onfulfilled, onrejected);
+      const settle = () => this.run();
+      const promise = latencyMs > 0
+        ? new Promise<{ data: unknown; error: unknown }>((resolve) => {
+            setTimeout(() => resolve(settle()), latencyMs);
+          })
+        : Promise.resolve(settle());
+      return promise.then(onfulfilled, onrejected);
     }
   }
 

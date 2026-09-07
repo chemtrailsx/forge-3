@@ -53,6 +53,7 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
   const [typed, setTyped] = useState('');
   const [canReplay, setCanReplay] = useState(false);
   const [notHeard, setNotHeard] = useState(false);
+  const [replyMs, setReplyMs] = useState<number | null>(null);
 
   const clientRef = useRef<VoiceClient | null>(null);
 
@@ -101,6 +102,7 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
         });
       },
       onMetrics: setMetrics,
+      onResponseLatency: setReplyMs,
       onNotHeard: () => {
         setNotHeard(true);
         window.setTimeout(() => setNotHeard(false), 2200);
@@ -184,6 +186,11 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
               {filler ? <div className="small muted">filler: “{filler}”</div> : null}
               {bargeIn !== null ? (
                 <div className="small muted">last interruption stopped audio in {bargeIn} ms</div>
+              ) : null}
+              {replyMs !== null ? (
+                <div className="small muted">
+                  replied {replyMs} ms after you stopped speaking
+                </div>
               ) : null}
               {metrics ? (
                 <div className="small muted">

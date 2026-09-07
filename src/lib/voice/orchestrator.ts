@@ -7,7 +7,7 @@ import { markInterrupted, nextTurnIndex, recentTurns, recordTurn } from '../db/t
 import { AppError, isAbort } from '../errors';
 import { buildMessages } from '../llm/prompt';
 import { getLlmProvider } from '../llm/provider';
-import type { ChatMessage, LlmProvider, ToolCall } from '../llm/types';
+import type { ChatMessage, LlmProvider, LlmStreamChunk, ToolCall } from '../llm/types';
 import { selectRelevantMemory } from '../memory/retrieval';
 import { getTtsProvider } from '../tts';
 import { segmentForSpeech, toSpeakable } from '../tts/speakable';
@@ -82,12 +82,29 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
   let llmMs = 0;
   let toolMs = 0;
 
-  // --- reconcile the previous turn before anything else --------------------
-  // If the user cut the assistant off, the record of that turn is rewritten to
-  // what they heard *before* this turn's history is read. Otherwise the model
-  // would see its own unheard sentence as context for the correction.
-  let state: LoadedState = await loadCookingState(db, sessionId);
+  // Overlapped with the reads below rather than paid for at the first `speak`.
+  tts.warm?.();
+
+  // --- load everything the first model call needs ---------------------------
+  //
+  // Every one of these is a round trip to a database in another region, and
+  // until the last of them lands the cook is standing over a pan hearing
+  // nothing. Run as one batch rather than a chain: ~900 ms of the wait before
+  // the first syllable was queueing here, not thinking.
+  //
+  // The exception is an interruption. If the user cut the assistant off, the
+  // record of that turn has to be rewritten to what they actually heard
+  // *before* the history is read — otherwise the model sees its own unheard
+  // sentence as the context for the correction. That ordering is worth more
+  // than the round trip it costs, and only on turns that were interrupted.
+  let state: LoadedState;
+  let turnIndex: number;
+  let allMemory: Awaited<ReturnType<typeof listMemory>>;
+  let profile: Awaited<ReturnType<typeof getProfile>>;
+  let history: Awaited<ReturnType<typeof recentTurns>>;
+
   if (input.interruption) {
+    state = await loadCookingState(db, sessionId);
     await markInterrupted(
       db,
       sessionId,
@@ -96,22 +113,40 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
       { interruptionLatencyMs: input.interruption.latencyMs },
     );
     state = { ...state, session: await recordCorrection(db, state, utterance) };
+    [turnIndex, allMemory, profile, history] = await Promise.all([
+      nextTurnIndex(db, sessionId),
+      listMemory(db, 100),
+      getProfile(db),
+      recentTurns(db, sessionId, 12),
+    ]);
+  } else {
+    [state, turnIndex, allMemory, profile, history] = await Promise.all([
+      loadCookingState(db, sessionId),
+      nextTurnIndex(db, sessionId),
+      listMemory(db, 100),
+      getProfile(db),
+      recentTurns(db, sessionId, 12),
+    ]);
   }
 
-  const turnIndex = await nextTurnIndex(db, sessionId);
   yield { type: 'turn.start', turnIndex, transcript: utterance };
   yield { type: 'state', state: state.snapshot };
 
-  // --- context -------------------------------------------------------------
-  const [allMemory, profile, history] = await Promise.all([
-    listMemory(db, 100),
-    getProfile(db),
-    recentTurns(db, sessionId, 12),
-  ]);
   const preferences: Preferences = profile?.preferences ?? {};
   const memory = selectRelevantMemory(allMemory, utterance, 6);
 
-  await recordTurn(db, { sessionId, turnIndex, role: 'user', text: utterance });
+  // Started, not awaited. Nothing the model is about to be asked depends on
+  // this row existing; only the assistant's own row does, and that is written
+  // at the end of the turn. Awaiting it here bought nothing and cost a round
+  // trip in front of the first word.
+  const userTurnWritten = recordTurn(db, {
+    sessionId,
+    turnIndex,
+    role: 'user',
+    text: utterance,
+  }).catch((error: unknown) => {
+    console.error('[orchestrator] could not persist user turn', error);
+  });
 
   const messages = buildMessages({
     state: state.snapshot,
@@ -135,12 +170,26 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
 
   try {
     // --- pass 1: answer, or decide which tools to call ---------------------
+    //
+    // Streamed rather than awaited whole. The first clause can be spoken while
+    // the rest of the answer is still being written, which removes the entire
+    // generation time of everything after it from the gap the cook is sitting
+    // in. On a spoken interface that gap is the product.
     const llmStart = Date.now();
-    const first = await llm.complete(messages, toolSchemas(), signal);
+    const noteFirstAudio = () => {
+      if (firstAudioAt === null) firstAudioAt = Date.now();
+    };
+
+    const first = yield* speakFirstPass(
+      llm.streamWithTools(messages, toolSchemas(), signal),
+      tts,
+      signal,
+      noteFirstAudio,
+    );
     llmMs += Date.now() - llmStart;
 
     if (first.toolCalls.length === 0) {
-      assistantText = first.content.trim();
+      assistantText = first.spoken;
     } else {
       // Delegated with `yield*` rather than collected: the filler has to reach
       // the browser *while* the tool is still running, so these events cannot
@@ -159,7 +208,7 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
 
       const followUp: ChatMessage[] = [
         ...buildMessages({ state: state.snapshot, memory, preferences, history, utterance }),
-        { role: 'assistant', content: first.content ?? '', toolCalls: first.toolCalls },
+        { role: 'assistant', content: first.spoken, toolCalls: first.toolCalls },
         ...toolMessages.messages,
       ];
 
@@ -184,13 +233,6 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
         assistantText = retry.content.trim() || EMPTY_ANSWER_FALLBACK;
         yield* speakText(assistantText, tts, signal, noteAudio);
       }
-    }
-
-    // The no-tool path already has its full text; speak it in clauses.
-    if (first.toolCalls.length === 0 && assistantText) {
-      yield* speakText(assistantText, tts, signal, () => {
-        if (firstAudioAt === null) firstAudioAt = Date.now();
-      });
     }
 
     completed = !signal.aborted;
@@ -230,6 +272,7 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
     // row to rewrite with the words that were actually heard.
     if (!completed) {
       tts.cancel();
+      await userTurnWritten;
       await persistAssistant(db, sessionId, turnIndex, assistantText, true, startedAt);
     }
   }
@@ -239,6 +282,7 @@ export async function* runTurn(input: RunTurnInput): AsyncGenerator<TurnEvent> {
   // assistant finished saying something the user cut off.
   if (!completed) return;
 
+  await userTurnWritten;
   await persistAssistant(db, sessionId, turnIndex, assistantText, false, startedAt);
 
   const metrics: TurnMetrics = {
@@ -326,6 +370,65 @@ async function* runTools(
   }
 
   return { messages, stateChanged, toolMs };
+}
+
+/**
+ * Runs the streamed first pass, speaking clauses as they complete.
+ *
+ * The tension it resolves: the answer should start being spoken as early as
+ * possible, but nothing should be spoken at all if the model turns out to be
+ * calling a tool. `tool_start` arrives before any tool fragment is assembled,
+ * and models that call tools emit no content first — so in practice the buffer
+ * is still empty when it lands, and the two never race. If they ever did,
+ * speaking stops the moment the marker arrives rather than talking over a
+ * result that has not been fetched.
+ */
+async function* speakFirstPass(
+  chunks: AsyncIterable<LlmStreamChunk>,
+  tts: TtsProvider,
+  signal: AbortSignal,
+  onAudio: () => void,
+): AsyncGenerator<TurnEvent, { spoken: string; toolCalls: ToolCall[] }> {
+  let buffer = '';
+  let spoken = '';
+  let toolCalls: ToolCall[] = [];
+  let callingTool = false;
+
+  for await (const chunk of chunks) {
+    if (signal.aborted) break;
+
+    if (chunk.type === 'tool_start') {
+      callingTool = true;
+      continue;
+    }
+    if (chunk.type === 'tool_calls') {
+      toolCalls = chunk.calls;
+      continue;
+    }
+
+    buffer += chunk.delta;
+    if (callingTool) continue;
+
+    // Whole clauses only. Splitting mid-clause makes the prosody audibly
+    // wrong, which costs more than the milliseconds it saves.
+    const boundary = lastBoundary(buffer);
+    if (boundary > 0) {
+      const ready = buffer.slice(0, boundary).trim();
+      buffer = buffer.slice(boundary);
+      if (ready) {
+        spoken += (spoken ? ' ' : '') + ready;
+        yield* speakText(ready, tts, signal, onAudio);
+      }
+    }
+  }
+
+  const tail = buffer.trim();
+  if (tail && !callingTool && toolCalls.length === 0 && !signal.aborted) {
+    spoken += (spoken ? ' ' : '') + tail;
+    yield* speakText(tail, tts, signal, onAudio);
+  }
+
+  return { spoken: spoken.trim(), toolCalls };
 }
 
 /**

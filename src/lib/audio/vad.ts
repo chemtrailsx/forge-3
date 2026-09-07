@@ -34,6 +34,17 @@ export type VadConfig = {
   floorAdapt: number;
   /** Speech shorter than this was a noise, not a sentence. */
   minVoicedMs: number;
+  /**
+   * Silence after which transcription may start, before the turn has ended.
+   *
+   * The hangover has to be long enough to survive the pause in "give me…​ two
+   * minutes", and every millisecond of it is dead time the cook spends waiting.
+   * Both are satisfiable at once: begin transcribing at this shorter mark, and
+   * if speech resumes, throw that work away. If it does not resume, everything
+   * after this point was silence — so the early transcript is the whole
+   * utterance, and the rest of the hangover costs nothing.
+   */
+  eagerEndpointMs: number;
 };
 
 export const DEFAULT_VAD: VadConfig = {
@@ -58,9 +69,14 @@ export const DEFAULT_VAD: VadConfig = {
    * noise, they return "Thank you." — and the assistant then answers it.
    */
   minVoicedMs: 320,
+  /*
+   * Long enough not to fire on the gap between words, short enough to hide
+   * most of the remaining hangover behind the transcription round trip.
+   */
+  eagerEndpointMs: 420,
 };
 
-export type VadEvent = 'speech-start' | 'speech-end' | null;
+export type VadEvent = 'speech-start' | 'speech-pause' | 'speech-end' | null;
 
 export class VoiceActivityDetector {
   private noiseFloor = 0.005;
@@ -70,6 +86,7 @@ export class VoiceActivityDetector {
   private speechMs = 0;
   private voicedMs = 0;
   private peak = 0;
+  private pausedAnnounced = false;
 
   constructor(private readonly config: VadConfig = DEFAULT_VAD) {}
 
@@ -114,6 +131,7 @@ export class VoiceActivityDetector {
     this.speechMs = 0;
     this.voicedMs = 0;
     this.peak = 0;
+    this.pausedAnnounced = false;
   }
 
   /**
@@ -144,6 +162,8 @@ export class VoiceActivityDetector {
         this.speechMs += windowMs;
         this.voicedMs += windowMs;
       }
+      // Speech resumed, so whatever was started at the pause is stale.
+      this.pausedAnnounced = false;
       if (!this.speaking && this.aboveMs >= this.config.onsetMs) {
         this.speaking = true;
         this.speechMs = this.aboveMs;
@@ -156,7 +176,12 @@ export class VoiceActivityDetector {
       if (this.speaking && this.belowMs >= this.config.hangoverMs) {
         this.speaking = false;
         this.speechMs = 0;
+        this.pausedAnnounced = false;
         return 'speech-end';
+      }
+      if (this.speaking && !this.pausedAnnounced && this.belowMs >= this.config.eagerEndpointMs) {
+        this.pausedAnnounced = true;
+        return 'speech-pause';
       }
     }
 

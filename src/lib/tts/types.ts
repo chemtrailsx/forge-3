@@ -78,4 +78,14 @@ export interface TtsProvider {
    */
   cancel(): void;
   close(): void;
+  /**
+   * Open whatever connection speaking will need, without speaking yet.
+   *
+   * Optional, and never awaited: a provider that needs no warm-up omits it, and
+   * one that does gets its handshake overlapped with the work the caller was
+   * going to do anyway. On a serverless deployment the process is frequently
+   * cold, so without this the TCP, TLS and auth handshake sits in front of the
+   * first syllable of a real reply rather than beside the database reads.
+   */
+  warm?(): void;
 }

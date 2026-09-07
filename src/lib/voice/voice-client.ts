@@ -47,6 +47,8 @@ export type VoiceClientEvents = {
   onBargeIn: (latencyMs: number) => void;
   /** Something was captured but was too faint or too short to be speech. */
   onNotHeard: () => void;
+  /** Milliseconds from the user falling silent to the first sound of a reply. */
+  onResponseLatency: (ms: number) => void;
   onMetrics: (metrics: TurnMetrics) => void;
   onError: (message: string) => void;
 };
@@ -109,6 +111,17 @@ export class VoiceClient {
   private nudgeTimer: number | null = null;
   private nudgeInFlight = false;
   private lastNudgeAt: number | null = null;
+
+  /**
+   * Transcription started at a pause, before the turn has formally ended.
+   *
+   * The hangover has to be long enough to survive a mid-sentence pause, and
+   * all of it is time the cook spends waiting. Running the transcription
+   * inside that window hides most of it; if speech resumes, this is aborted
+   * and thrown away.
+   */
+  private eager: { controller: AbortController; text: Promise<string | null> } | null = null;
+  private speechEndedAt: number | null = null;
 
   /**
    * The audio of the most recent spoken answer, kept so it can be replayed
@@ -349,8 +362,15 @@ export class VoiceClient {
     // next clause is about to arrive.
     const event = this.vad.push(rms, VAD_WINDOW_MS, this.assistantActive());
 
+    if (event === 'speech-pause') {
+      this.startEagerTranscription();
+      return;
+    }
+
     if (event === 'speech-start') {
       this.speechStartedAt = performance.now();
+      // They carried on, so the transcript begun at the pause is incomplete.
+      this.cancelEagerTranscription();
       /*
        * Only interrupt something that is actually being said.
        *
@@ -370,6 +390,7 @@ export class VoiceClient {
     }
 
     if (event === 'speech-end') {
+      this.speechEndedAt = performance.now();
       const speechLike = this.vad.looksLikeSpeech();
       const utterance = this.recorder?.endUtterance() ?? null;
       this.vad.reset();
@@ -460,24 +481,59 @@ export class VoiceClient {
     }
   }
 
+/**
+   * Begin transcribing at a pause, inside the hangover window.
+   *
+   * Safe because of what the hangover means: if it elapses, the cook did not
+   * resume, so everything after this snapshot was silence and the snapshot is
+   * the whole utterance. If they do resume, this is aborted before its result
+   * is ever used.
+   */
+  private startEagerTranscription(): void {
+    if (this.eager || !this.recorder) return;
+    const audio = this.recorder.snapshot();
+    if (!audio) return;
+
+    const controller = new AbortController();
+    this.eager = { controller, text: this.transcribe(audio, controller.signal) };
+  }
+
+  private cancelEagerTranscription(): void {
+    this.eager?.controller.abort();
+    this.eager = null;
+  }
+
+  /** One transcription request. Returns null if it failed or was abandoned. */
+  private async transcribe(audio: Blob, signal: AbortSignal): Promise<string | null> {
+    try {
+      const form = new FormData();
+      const extension = audio.type.includes('wav') ? 'wav' : 'webm';
+      form.append('audio', audio, `utterance.${extension}`);
+
+      const response = await fetch('/api/stt', { method: 'POST', body: form, signal });
+      if (!response.ok) {
+        if (!signal.aborted) this.events.onError(await errorMessage(response));
+        return null;
+      }
+      return ((await response.json()) as { text?: string }).text?.trim() ?? '';
+    } catch {
+      return null;
+    }
+  }
+
   private async handleUtterance(audio: Blob): Promise<void> {
     this.setStatus('transcribing');
 
-    let transcript = '';
-    try {
-      const form = new FormData();
-      // Named from the blob's own type: a filename that disagrees with the
-      // bytes is how a valid upload still gets rejected as unreadable.
-      const extension = audio.type.includes('wav') ? 'wav' : 'webm';
-      form.append('audio', audio, `utterance.${extension}`);
-      const response = await fetch('/api/stt', { method: 'POST', body: form });
-      if (!response.ok) {
-        this.events.onError(await errorMessage(response));
-        this.setResting();
-        return;
-      }
-      transcript = ((await response.json()) as { text?: string }).text?.trim() ?? '';
-    } catch {
+    // Usually already running, and often already finished: it was started at
+    // the pause, part-way through the hangover.
+    const pending = this.eager;
+    this.eager = null;
+
+    const transcript = pending
+      ? await pending.text
+      : await this.transcribe(audio, new AbortController().signal);
+
+    if (transcript === null) {
       this.events.onError('Could not reach speech recognition.');
       this.setResting();
       return;
@@ -614,6 +670,14 @@ export class VoiceClient {
         break;
       }
       case 'audio': {
+        // The only latency number that describes what the cook experiences:
+        // from the moment they stopped talking to the moment sound comes out.
+        // Server-side timings start when the request arrives, which omits the
+        // hangover, the upload and the transcription — most of the wait.
+        if (this.speechEndedAt !== null) {
+          this.events.onResponseLatency(Math.round(performance.now() - this.speechEndedAt));
+          this.speechEndedAt = null;
+        }
         const samples = Math.floor((event.pcm.length * 3) / 4 / 2);
         this.tracker.addSamples(event.contextId, samples);
         this.player.enqueueBase64(event.contextId, event.pcm);

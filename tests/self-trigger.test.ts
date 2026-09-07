@@ -147,12 +147,58 @@ describe('being cut off mid-sentence', () => {
     feed(vad, 0.25, 600);
 
     // A natural mid-sentence pause. At the old 700 ms hangover this ended the
-    // turn and the cook was cut off.
-    expect(feed(vad, 0.003, 900).filter(Boolean)).toEqual([]);
+    // turn and the cook was cut off. It now reports a pause — which is what
+    // starts transcription early — but crucially does not end the turn.
+    const during = feed(vad, 0.003, 900).filter(Boolean);
+    expect(during).toContain('speech-pause');
+    expect(during).not.toContain('speech-end');
     expect(vad.isSpeaking).toBe(true);
 
     // Speech resumes and the utterance continues as one.
     expect(feed(vad, 0.25, 400).filter(Boolean)).toEqual([]);
+  });
+
+  /**
+   * The eager endpoint is what removes most of the hangover from the wait, and
+   * it is only safe because of this property: it fires once, and resuming
+   * speech re-arms it. Anything transcribed from it is thrown away if the cook
+   * carries on, and is the complete utterance if they do not.
+   */
+  it('announces a pause once, and again only after speech resumes', () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, 0.004, 800);
+    feed(vad, 0.25, 500);
+
+    // One pause, however long the silence runs.
+    const first = feed(vad, 0.003, 900).filter(Boolean);
+    expect(first.filter((e) => e === 'speech-pause')).toHaveLength(1);
+
+    // Resume, pause again: a second announcement, because the first snapshot
+    // is now stale.
+    feed(vad, 0.25, 400);
+    const second = feed(vad, 0.003, 900).filter(Boolean);
+    expect(second).toContain('speech-pause');
+  });
+
+  it('pauses well before it ends the turn, which is where the saving comes from', () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, 0.004, 800);
+    feed(vad, 0.25, 500);
+
+    let elapsed = 0;
+    let pausedAt: number | null = null;
+    let endedAt: number | null = null;
+    while (elapsed < 3000 && endedAt === null) {
+      const event = vad.push(0.003, 20);
+      elapsed += 20;
+      if (event === 'speech-pause' && pausedAt === null) pausedAt = elapsed;
+      if (event === 'speech-end') endedAt = elapsed;
+    }
+
+    expect(pausedAt).not.toBeNull();
+    expect(endedAt).not.toBeNull();
+    // Transcription gets this long a head start on the turn ending.
+    expect(endedAt! - pausedAt!).toBeGreaterThan(500);
   });
 
   it('still ends the turn once they have genuinely stopped', () => {

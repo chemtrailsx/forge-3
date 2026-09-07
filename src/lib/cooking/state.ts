@@ -26,9 +26,14 @@ export async function loadCookingState(db: Db, sessionId: string): Promise<Loade
   const session = await getSession(db, sessionId);
   if (!session) throw new NotFoundError('Cooking session');
 
-  const recipe = session.recipeId ? await getRecipe(db, session.recipeId) : null;
+  // Concurrently: the timers do not depend on the recipe, and each of these is
+  // a round trip to a database in another region. Chaining them is a tenth of a
+  // second the cook spends listening to nothing.
+  const [recipe, timers] = await Promise.all([
+    session.recipeId ? getRecipe(db, session.recipeId) : Promise.resolve(null),
+    listActiveTimers(db, session.id),
+  ]);
 
-  const timers = await listActiveTimers(db, session.id);
   // Only timers the cook has already been told about are retired here; an
   // expired-but-unannounced one is the trigger for a reminder and has to
   // survive until it has been spoken.

@@ -25,6 +25,18 @@ export type ChatResult = {
   toolCalls: ToolCall[];
 };
 
+/**
+ * A streamed first pass.
+ *
+ * `tool_start` arrives the moment the model begins emitting a tool call, so
+ * the caller can stop speaking content it had begun on. `tool_calls` carries
+ * the assembled calls once the stream ends.
+ */
+export type LlmStreamChunk =
+  | { type: 'content'; delta: string }
+  | { type: 'tool_start' }
+  | { type: 'tool_calls'; calls: ToolCall[] };
+
 export interface LlmProvider {
   readonly model: string;
   complete(
@@ -33,4 +45,16 @@ export interface LlmProvider {
     signal: AbortSignal,
   ): Promise<ChatResult>;
   stream(messages: ChatMessage[], signal: AbortSignal): AsyncIterable<string>;
+  /**
+   * The first pass, streamed.
+   *
+   * Separate from `complete` because the answer can begin being spoken while
+   * the rest of it is still being written — which on a spoken interface is the
+   * difference between a reply and a pause.
+   */
+  streamWithTools(
+    messages: ChatMessage[],
+    tools: ToolSchema[],
+    signal: AbortSignal,
+  ): AsyncIterable<LlmStreamChunk>;
 }

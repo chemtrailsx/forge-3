@@ -79,6 +79,21 @@ export class UtteranceRecorder {
     this.capturing = true;
   }
 
+  /**
+   * The utterance so far, without ending it.
+   *
+   * Used at a pause to start transcribing before the turn has formally ended.
+   * If the cook resumes, that work is thrown away; if they do not, everything
+   * after this point was silence and this snapshot is the whole utterance.
+   */
+  snapshot(): Blob | null {
+    if (!this.capturing || this.utteranceSamples === 0) return null;
+    if (this.utteranceSamples < (MIN_UTTERANCE_MS / 1000) * this.sampleRate) return null;
+
+    const samples = concatSamples([...this.utterance], this.utteranceSamples);
+    return new Blob([encodeWav(samples, this.sampleRate)], { type: 'audio/wav' });
+  }
+
   /** Speech ended. Returns a WAV blob, or null if there was nothing usable. */
   endUtterance(): Blob | null {
     if (!this.capturing) return null;

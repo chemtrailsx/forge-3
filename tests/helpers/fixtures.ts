@@ -1,5 +1,12 @@
 import type { Db } from '@/lib/db/context';
-import type { LlmProvider, ChatMessage, ChatResult, ToolCall, ToolSchema } from '@/lib/llm/types';
+import type {
+  LlmProvider,
+  ChatMessage,
+  ChatResult,
+  LlmStreamChunk,
+  ToolCall,
+  ToolSchema,
+} from '@/lib/llm/types';
 import type { SpeakRequest, TtsEvent, TtsProvider, TtsDescriptor } from '@/lib/tts/types';
 import { createFakeSupabase, type Tables } from './fake-supabase';
 
@@ -105,8 +112,8 @@ export function seedTables(): Tables {
   };
 }
 
-export function makeDb(userId: string, tables: Tables = seedTables()) {
-  const fake = createFakeSupabase({ tables, rlsUserId: userId });
+export function makeDb(userId: string, tables: Tables = seedTables(), latencyMs = 0) {
+  const fake = createFakeSupabase({ tables, rlsUserId: userId, latencyMs });
   const db: Db = { supabase: fake.client, userId };
   return { db, fake };
 }
@@ -143,6 +150,37 @@ export class FakeLlm implements LlmProvider {
     if (this.delayMs > 0) await abortableSleep(this.delayMs, signal);
     const turn = this.script[Math.min(this.index++, this.script.length - 1)];
     return { content: turn?.content ?? '', toolCalls: turn?.toolCalls ?? [] };
+  }
+
+/**
+   * The scripted turn, delivered as a stream.
+   *
+   * Content arrives a word at a time so a test can observe the orchestrator
+   * speaking a clause before the rest has been written — which is the whole
+   * point of streaming the first pass.
+   */
+  async *streamWithTools(
+    messages: ChatMessage[],
+    tools: ToolSchema[],
+    signal: AbortSignal,
+  ): AsyncIterable<LlmStreamChunk> {
+    this.completeCalls.push(messages);
+    this.toolSchemas.push(tools);
+    if (this.delayMs > 0) await abortableSleep(this.delayMs, signal);
+
+    const turn = this.script[Math.min(this.index++, this.script.length - 1)];
+    const calls = turn?.toolCalls ?? [];
+
+    if (calls.length > 0) {
+      yield { type: 'tool_start' };
+      yield { type: 'tool_calls', calls };
+      return;
+    }
+
+    for (const word of (turn?.content ?? '').split(' ')) {
+      if (signal.aborted) return;
+      if (word) yield { type: 'content', delta: `${word} ` };
+    }
   }
 
   async *stream(messages: ChatMessage[], signal: AbortSignal): AsyncIterable<string> {

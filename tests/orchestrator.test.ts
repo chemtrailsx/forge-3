@@ -90,6 +90,9 @@ describe('a normal turn', () => {
       stream: async function* () {
         throw new Error('should not be reached');
       },
+      streamWithTools: async function* () {
+        throw new ProviderError('llm', 'The assistant could not put that together.');
+      },
     };
 
     const events = await collect(

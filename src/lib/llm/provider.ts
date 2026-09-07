@@ -1,6 +1,13 @@
 import { llmEnv, type LlmEnv } from '../env';
 import { ProviderError } from '../errors';
-import type { ChatMessage, ChatResult, LlmProvider, ToolCall, ToolSchema } from './types';
+import type {
+  ChatMessage,
+  ChatResult,
+  LlmProvider,
+  LlmStreamChunk,
+  ToolCall,
+  ToolSchema,
+} from './types';
 
 /**
  * An OpenAI-compatible chat client.
@@ -163,6 +170,128 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     }));
 
     return { content: message?.content ?? '', toolCalls };
+  }
+
+
+  /**
+   * The first pass, streamed, so the answer can start being spoken while the
+   * rest of it is still being written.
+   *
+   * Tool calls arrive as indexed fragments that have to be reassembled, and
+   * `tool_start` is emitted as soon as the first fragment appears — the caller
+   * needs to know it must not speak whatever content came before it.
+   */
+  async *streamWithTools(
+    messages: ChatMessage[],
+    tools: ToolSchema[],
+    signal: AbortSignal,
+  ): AsyncIterable<LlmStreamChunk> {
+    const response = await this.post(
+      {
+        messages: messages.map(toWire),
+        temperature: 0.4,
+        max_tokens: TOOL_CALL_TOKENS,
+        stream: true,
+        ...(tools.length > 0
+          ? {
+              tools: tools.map((tool) => ({
+                type: 'function',
+                function: {
+                  name: tool.name,
+                  description: tool.description,
+                  parameters: tool.parameters,
+                },
+              })),
+              tool_choice: 'auto',
+            }
+          : {}),
+      },
+      signal,
+    );
+
+    const body = response.body;
+    if (!body) throw new ProviderError('llm', 'Language model returned an empty stream.');
+
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // Fragments are keyed by index, because a model may interleave two calls.
+    const building = new Map<number, { id: string; name: string; args: string }>();
+    let announcedToolStart = false;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (!data || data === '[DONE]') continue;
+
+          let parsed: {
+            choices?: Array<{
+              delta?: {
+                content?: string;
+                tool_calls?: Array<{
+                  index?: number;
+                  id?: string;
+                  function?: { name?: string; arguments?: string };
+                }>;
+              };
+            }>;
+          };
+          try {
+            parsed = JSON.parse(data);
+          } catch {
+            // A frame split across reads; the next one completes it.
+            continue;
+          }
+
+          const delta = parsed.choices?.[0]?.delta;
+          if (!delta) continue;
+
+          if (delta.tool_calls && delta.tool_calls.length > 0) {
+            if (!announcedToolStart) {
+              announcedToolStart = true;
+              yield { type: 'tool_start' };
+            }
+            for (const fragment of delta.tool_calls) {
+              const index = fragment.index ?? 0;
+              const current = building.get(index) ?? { id: '', name: '', args: '' };
+              building.set(index, {
+                id: fragment.id ?? current.id,
+                name: fragment.function?.name ?? current.name,
+                args: current.args + (fragment.function?.arguments ?? ''),
+              });
+            }
+          }
+
+          if (delta.content) yield { type: 'content', delta: delta.content };
+        }
+      }
+    } finally {
+      reader.releaseLock();
+      if (signal.aborted) await body.cancel().catch(() => undefined);
+    }
+
+    if (building.size > 0) {
+      const calls: ToolCall[] = [...building.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([index, call]) => ({
+          id: call.id || `call_${index}`,
+          name: call.name,
+          arguments: call.args,
+        }))
+        .filter((call) => call.name);
+      if (calls.length > 0) yield { type: 'tool_calls', calls };
+    }
   }
 
   /**

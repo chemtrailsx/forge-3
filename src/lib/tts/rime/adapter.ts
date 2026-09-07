@@ -87,6 +87,20 @@ export class RimeAdapter implements TtsProvider {
     yield { type: 'done', contextId: request.contextId };
   }
 
+  /**
+   * Start connecting, and do not wait for it.
+   *
+   * `connect()` is idempotent and returns the in-flight attempt, so the
+   * `speak` that follows shares this handshake rather than starting a second
+   * one. A failure here is not reported: the connection is retried by `speak`,
+   * which is where an error has somewhere to go.
+   */
+  warm(): void {
+    void this.ws.connect().catch(() => {
+      // Reported by the speak that needs it.
+    });
+  }
+
   private async *speakWs(request: SpeakRequest, signal: AbortSignal): AsyncIterable<TtsEvent> {
     await this.ws.connect();
 
