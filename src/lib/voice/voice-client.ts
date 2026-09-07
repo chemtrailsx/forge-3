@@ -287,7 +287,9 @@ export class VoiceClient {
     if (!this.running) return;
     this.events.onLevel(rms, this.vad.floor);
 
-    const event = this.vad.push(rms, VAD_WINDOW_MS);
+    // The threshold rises while the assistant is talking, so its own voice
+    // coming back through the microphone does not read as a new turn.
+    const event = this.vad.push(rms, VAD_WINDOW_MS, this.assistantSpeaking);
 
     if (event === 'speech-start') {
       this.speechStartedAt = performance.now();
@@ -299,8 +301,19 @@ export class VoiceClient {
     }
 
     if (event === 'speech-end') {
+      const speechLike = this.vad.looksLikeSpeech();
       const utterance = this.recorder?.endUtterance() ?? null;
-      if (utterance) void this.handleUtterance(utterance);
+      this.vad.reset();
+
+      // Discarded here rather than uploaded, because a transcriber handed a
+      // fragment of noise does not return nothing — it returns "Thank you.",
+      // and the assistant answers a sentence the cook never said.
+      if (!utterance || !speechLike) {
+        if (utterance) console.debug('[voice] discarded a clip that did not look like speech');
+        return;
+      }
+
+      void this.handleUtterance(utterance);
       return;
     }
 

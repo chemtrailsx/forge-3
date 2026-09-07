@@ -295,7 +295,7 @@ set rather than a model of it. Both users are deleted afterwards, including on
 failure. Needs `SUPABASE_SERVICE_ROLE_KEY` for setup and teardown only; the
 assertions themselves all run as ordinary users.
 
-111 tests across eight files. They run without network access or API keys: the orchestrator is an
+191 tests across thirteen files. They run without network access or API keys: the orchestrator is an
 async generator, so tests drive real turns with injected fake providers, and the database is an
 in-memory PostgREST double that **also simulates RLS** — a test that forgets the application-level
 filter still cannot read across users.
@@ -308,6 +308,8 @@ filter still cannot read across users.
 | `cooking-state.test.ts` | scaling and rounding, snapshots, timers, persistence across turns |
 | `audio-capture.test.ts` | WAV header layout, size fields, clamping, and that any run of windows still encodes to a complete file |
 | `barge-in.test.ts` | ledger arithmetic, tracker cut points, no audio after abort, interrupted turn recorded and rewritten, slow tool cancelled |
+| `self-trigger.test.ts` | silence artefacts from the transcriber, not hearing itself through the speakers, rejecting clips that are not speech, surviving a mid-sentence pause |
+| `pcm-player.test.ts` | the audio worklet loaded into a stubbed worklet scope: jitter buffer, continuous playback, re-priming after a dry queue, clear-on-barge-in |
 | `voice-behaviour.test.ts` | speech-profile selection, speakable text, backchannel policy, VAD, filler timing |
 | `orchestrator.test.ts` | turn shape, prompt contents, tool turns, tool-failure recovery, per-user separation |
 
@@ -340,8 +342,12 @@ If a dev server ever does start throwing `ENOENT ... routes-manifest.json` or
   through the typed path, which calls the same code. But no real microphone has driven
   capture → VAD → STT in this repository, so onset thresholds in a noisy kitchen are reasoned
   about rather than measured.
-- **Echo cancellation is a hardware dependency.** The mic stays open while Rime speaks; on a device
-  with poor AEC the assistant can hear itself and barge in on its own voice. Use a headset.
+- **Echo cancellation is still a hardware dependency.** The mic stays open while Rime speaks. The
+  detector now demands a much louder signal to count as an interruption while the assistant is
+  talking (`duckedMultiplier`), and stops adapting its noise floor to its own voice — without that,
+  a session in a real kitchen filled with unprompted turns, because leaked speaker audio tripped the
+  detector and a fragment of near-silence came back from Whisper as "Thank you." On a device with
+  poor AEC, a headset is still the answer.
 - **Backchannels are timing-based, not semantic.** The policy is deliberately conservative
   (3.5 s of speech, 9 s gap, two per turn) rather than trying to detect a natural pause.
 - **No semantic memory retrieval yet.** Selection is lexical. `user_memory` is ready for a

@@ -17,7 +17,7 @@
  * dropped by id without touching what is currently playing.
  */
 class PcmPlayer extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
     /** @type {{ contextId: string, data: Float32Array }[]} */
     this.queue = [];
@@ -28,6 +28,23 @@ class PcmPlayer extends AudioWorkletProcessor {
     this.reportCountdown = 0;
     this.wasPlaying = false;
 
+    /**
+     * Jitter buffer.
+     *
+     * Audio arrives over the network in chunks that do not pace themselves to
+     * the speaker. Playing the instant the first one lands means the queue
+     * runs dry whenever a chunk is a few milliseconds late, and every dry
+     * quantum is a hole punched in the middle of a word.
+     *
+     * So playback waits until there is a cushion, and refuses to start again
+     * on a single chunk after running dry. The cost is a few milliseconds
+     * before the first syllable; the benefit is that the sentence is
+     * continuous, which is the difference between a voice and a stutter.
+     */
+    this.minBufferSamples = (options && options.processorOptions
+      && options.processorOptions.minBufferSamples) || 0;
+    this.priming = true;
+
     this.port.onmessage = (event) => {
       const message = event.data;
       if (message.type === 'push') {
@@ -35,9 +52,32 @@ class PcmPlayer extends AudioWorkletProcessor {
       } else if (message.type === 'clear') {
         this.queue = [];
         this.offset = 0;
+        this.priming = true;
         this.port.postMessage({ type: 'cleared' });
       }
     };
+  }
+
+  /** Samples still waiting to be played. */
+  buffered() {
+    let total = -this.offset;
+    for (let i = 0; i < this.queue.length; i += 1) total += this.queue[i].data.length;
+    return total > 0 ? total : 0;
+  }
+
+  /**
+   * ~20 ms reporting cadence: often enough for the UI and for the
+   * heard-transcript ledger, rare enough not to flood the message port.
+   */
+  reportProgress(frames) {
+    this.reportCountdown -= frames;
+    if (this.reportCountdown > 0) return;
+    this.reportCountdown = sampleRate / 50;
+    this.port.postMessage({
+      type: 'played',
+      total: this.samplesPlayed,
+      byContext: Object.fromEntries(this.playedByContext),
+    });
   }
 
   process(_inputs, outputs) {
@@ -45,6 +85,17 @@ class PcmPlayer extends AudioWorkletProcessor {
     if (!output || output.length === 0) return true;
     const channel = output[0];
     let index = 0;
+
+    // Hold output silent until there is enough of a cushion to play through a
+    // late chunk. Once primed, keep going until the queue actually empties.
+    if (this.priming) {
+      if (this.buffered() < this.minBufferSamples) {
+        channel.fill(0);
+        this.reportProgress(channel.length);
+        return true;
+      }
+      this.priming = false;
+    }
 
     while (index < channel.length) {
       const head = this.queue[0];
@@ -68,8 +119,13 @@ class PcmPlayer extends AudioWorkletProcessor {
       }
     }
 
-    // Silence for the rest of the quantum when the queue runs dry.
-    if (index < channel.length) channel.fill(0, index);
+    // The queue ran dry mid-quantum. Go back to priming rather than trickling
+    // out one late chunk at a time, which is what turns a network hiccup into
+    // a stutter across the rest of the sentence.
+    if (index < channel.length) {
+      channel.fill(0, index);
+      if (this.queue.length === 0) this.priming = true;
+    }
 
     const playing = this.queue.length > 0;
     if (playing !== this.wasPlaying) {
@@ -77,17 +133,7 @@ class PcmPlayer extends AudioWorkletProcessor {
       this.port.postMessage({ type: playing ? 'playing' : 'drained' });
     }
 
-    // ~20 ms of reporting cadence: often enough for the UI and the ledger,
-    // rare enough not to flood the message port.
-    this.reportCountdown -= channel.length;
-    if (this.reportCountdown <= 0) {
-      this.reportCountdown = sampleRate / 50;
-      this.port.postMessage({
-        type: 'played',
-        total: this.samplesPlayed,
-        byContext: Object.fromEntries(this.playedByContext),
-      });
-    }
+    this.reportProgress(channel.length);
 
     return true;
   }

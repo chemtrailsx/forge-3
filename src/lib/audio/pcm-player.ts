@@ -34,7 +34,17 @@ export class PcmPlayer {
     const context = new AudioContext({ sampleRate: this.sampleRate, latencyHint: 'interactive' });
     await context.audioWorklet.addModule('/worklets/pcm-player.js');
 
-    const node = new AudioWorkletNode(context, 'pcm-player', { outputChannelCount: [1] });
+    const node = new AudioWorkletNode(context, 'pcm-player', {
+      outputChannelCount: [1],
+      processorOptions: {
+        // ~180 ms of cushion before the first syllable. Chunks arrive over the
+        // network without pacing themselves to the speaker, and playing the
+        // moment the first one lands means every late chunk is a hole in the
+        // middle of a word. The delay is barely perceptible; the stutter it
+        // prevents is not.
+        minBufferSamples: Math.round(this.sampleRate * 0.18),
+      },
+    });
     const gain = context.createGain();
     gain.gain.value = 1;
     node.connect(gain).connect(context.destination);

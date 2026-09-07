@@ -1,5 +1,6 @@
 import { sttEnv, type SttEnv } from '../env';
 import { ProviderError, ValidationError } from '../errors';
+import { isLikelyHallucination } from './hallucinations';
 
 /**
  * Speech to text, against an OpenAI-compatible `/audio/transcriptions`
@@ -57,7 +58,16 @@ export class OpenAiCompatibleStt implements SttProvider {
     }
 
     const payload = (await response.json()) as { text?: string };
-    return (payload.text ?? '').trim();
+    const text = (payload.text ?? '').trim();
+
+    // Whisper answers silence with speech. Returning an empty string here
+    // means the caller treats it as "nothing was said", which is the truth.
+    if (isLikelyHallucination(text)) {
+      console.warn(`[stt] discarded a likely silence artefact: ${JSON.stringify(text)}`);
+      return '';
+    }
+
+    return text;
   }
 }
 
