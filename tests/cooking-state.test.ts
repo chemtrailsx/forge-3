@@ -205,6 +205,23 @@ describe('naming a step for a spoken reminder', () => {
     );
   });
 
+  /**
+   * Observed live: this produced "pan", so the reminder would have been "your
+   * pan should be ready now" — the wrong sentence for someone who cannot see
+   * the hob, about the wrong object entirely.
+   */
+  it('names what is being timed, not whatever the step mentions first', () => {
+    expect(
+      describeStep('Heat a pan, melt the butter, and place the chicken to cook for eight minutes.'),
+    ).toBe('chicken');
+  });
+
+  it('falls back to the object when the timed clause is only a verb', () => {
+    // "cook for eight minutes" names no object; the clause before it does.
+    expect(describeStep('Add the rice and cook for twenty minutes')).toBe('rice');
+    expect(describeStep('Put the potatoes on and boil for fifteen minutes')).toBe('potatoes');
+  });
+
   it('never leaves an article that would double up after "your"', () => {
     for (const step of [
       'Add the spaghetti and cook for eight minutes',

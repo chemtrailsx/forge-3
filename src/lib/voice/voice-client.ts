@@ -45,6 +45,8 @@ export type VoiceClientEvents = {
   onTool: (event: { name: string; phase: 'start' | 'end'; ok?: boolean; ms?: number }) => void;
   onFiller: (text: string) => void;
   onBargeIn: (latencyMs: number) => void;
+  /** Something was captured but was too faint or too short to be speech. */
+  onNotHeard: () => void;
   onMetrics: (metrics: TurnMetrics) => void;
   onError: (message: string) => void;
 };
@@ -349,7 +351,18 @@ export class VoiceClient {
 
     if (event === 'speech-start') {
       this.speechStartedAt = performance.now();
-      if (this.assistantSpeaking || this.turnController) await this.bargeIn();
+      /*
+       * Only interrupt something that is actually being said.
+       *
+       * This used to also fire whenever a turn was merely in flight, which
+       * meant any noise during the ten seconds it takes to plan a recipe
+       * killed that turn — and the noise itself was then discarded as not
+       * speech, so nothing replaced it. The cook was left in silence having
+       * done nothing wrong. A turn that has not produced audio yet is not
+       * talking over anyone, so it is left alone until we know whether what we
+       * just heard was really speech.
+       */
+      if (this.assistantSpeaking) await this.bargeIn();
       this.recorder?.beginUtterance();
       this.backchannelCount = 0;
       this.lastBackchannelAt = null;
@@ -364,11 +377,18 @@ export class VoiceClient {
       // Discarded here rather than uploaded, because a transcriber handed a
       // fragment of noise does not return nothing — it returns "Thank you.",
       // and the assistant answers a sentence the cook never said.
+      //
+      // Said out loud on the screen, because the alternative is a product that
+      // ignores you without explanation. "It did not hear that" is a different
+      // problem from "it is broken", and a cook who cannot tell them apart
+      // just keeps talking to a machine that never answers.
       if (!utterance || !speechLike) {
-        if (utterance) console.debug('[voice] discarded a clip that did not look like speech');
+        this.events.onNotHeard();
         return;
       }
 
+      // Decided here instead, once we know it was speech: a real utterance
+      // supersedes a turn still in flight, noise does not.
       void this.handleUtterance(utterance);
       return;
     }
@@ -469,6 +489,11 @@ export class VoiceClient {
     }
 
     this.events.onTranscript({ id: cryptoId(), role: 'user', text: transcript });
+
+    // A real utterance replaces a turn that is still being worked on. By this
+    // point the clip has passed the energy gate and been transcribed, so we
+    // know it is speech rather than a pan lid.
+    if (this.turnController) await this.bargeIn();
 
     if (await this.handledAsReplay(transcript)) return;
     await this.runTurn(transcript);

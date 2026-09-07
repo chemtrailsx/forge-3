@@ -120,15 +120,48 @@ export async function moveToStep(
  * whole instruction read out a second time.
  */
 export function describeStep(text: string): string {
-  const cleaned = text
-    .replace(/^(then\s+|now\s+)/i, '')
+  const withoutLead = text.replace(/^(then\s+|now\s+)/i, '');
+
+  /*
+   * Pick the clause that carries the duration, not the first one.
+   *
+   * "Heat a pan, melt the butter, and place the chicken to cook for eight
+   * minutes" is timing the chicken, but the first clause is about the pan —
+   * and "your pan should be ready now" is the wrong sentence to say to someone
+   * who cannot see the hob.
+   */
+  const clauses = withoutLead.split(/\s*(?:[,;]|\s\b(?:and|then|while)\b)\s*/i).filter(Boolean);
+  const timed = clauses.find((clause) => /\b(seconds?|minutes?|hours?)\b/i.test(clause));
+
+  // The timed clause first, but it does not always carry the object: in "add
+  // the spaghetti and cook for eight minutes" the duration sits on a clause
+  // that is only a verb, and the thing being timed is named in the one before.
+  const fromTimed = timed ? labelFrom(timed) : '';
+  const label = isJustAVerb(fromTimed) ? labelFrom(clauses[0] ?? '') || fromTimed : fromTimed;
+
+  return (label || withoutLead.trim() || 'that').slice(0, 60);
+}
+
+/** Verbs that name an action rather than a thing you can be told is ready. */
+const BARE_VERBS =
+  /^(cook|cooking|simmer|simmering|boil|boiling|bake|baking|roast|roasting|rest|resting|chill|heat|heating|fry|frying|steam|steaming|reduce|reducing|saute|sauté|stir|stirring|wait|leave|sit|set)$/i;
+
+function isJustAVerb(label: string): boolean {
+  return label === '' || BARE_VERBS.test(label);
+}
+
+function labelFrom(clause: string): string {
+  const cleaned = clause
+    // The conjunction survives the clause split when it followed a comma:
+    // "…, and place the chicken" arrives here still carrying its "and".
+    .replace(/^\s*(and|then|now|next)\s+/i, '')
     // "for eight minutes" is the duration, not part of the thing's name.
     .replace(/\s+for\s+[\w\s-]*\b(seconds?|minutes?|hours?)\b.*$/i, '')
-    .replace(/[.,;:].*$/, '')
-    // "Add the spaghetti and cook" — the second clause is a further
-    // instruction, and only the first names the thing being cooked.
-    .split(/\s+\b(?:and|then|until|while)\b\s+/i)[0]
-    ?.trim() ?? '';
+    // "the chicken to cook", "the sauce until thickened" — the tail is the
+    // outcome, and the thing itself comes before it.
+    .split(/\s+\b(?:to|until)\b\s+/i)[0]
+    ?.replace(/[.:].*$/, '')
+    .trim() ?? '';
 
   const words = cleaned.split(/\s+/).filter(Boolean);
   // Drop a leading imperative so the label reads as a thing, not an order.
@@ -136,10 +169,13 @@ export function describeStep(text: string): string {
 
   // No article: the label is dropped into "Your ___ should be ready now", and
   // "Your the spaghetti" is the kind of sentence that makes a voice sound
-  // broken even when the timing is perfect.
-  const label = withoutVerb.join(' ').replace(/^(the|a|an|some|your)\s+/i, '');
-
-  return (label || cleaned || 'that').slice(0, 60);
+  // broken even when the timing is perfect. The trailing particle goes for the
+  // same reason — "your potatoes on" is not a sentence.
+  return withoutVerb
+    .join(' ')
+    .replace(/^(the|a|an|some|your)\s+/i, '')
+    .replace(/\s+(on|off|in|over|through|down|up|back|aside|there)$/i, '')
+    .trim();
 }
 
 export async function setServings(

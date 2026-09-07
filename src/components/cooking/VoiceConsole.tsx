@@ -52,6 +52,7 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
   const [canReplay, setCanReplay] = useState(false);
+  const [notHeard, setNotHeard] = useState(false);
 
   const clientRef = useRef<VoiceClient | null>(null);
 
@@ -100,6 +101,10 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
         });
       },
       onMetrics: setMetrics,
+      onNotHeard: () => {
+        setNotHeard(true);
+        window.setTimeout(() => setNotHeard(false), 2200);
+      },
       onError: setError,
     });
     clientRef.current = client;
@@ -171,6 +176,11 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
                 </button>
               </div>
               <div className="small muted">or just say &ldquo;say that again&rdquo;</div>
+              {notHeard ? (
+                <div className="small" style={{ color: 'var(--accent)' }}>
+                  Didn&rsquo;t catch that — say it again a little louder.
+                </div>
+              ) : null}
               {filler ? <div className="small muted">filler: “{filler}”</div> : null}
               {bargeIn !== null ? (
                 <div className="small muted">last interruption stopped audio in {bargeIn} ms</div>

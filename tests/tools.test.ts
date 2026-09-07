@@ -250,6 +250,65 @@ describe('timers', () => {
   });
 });
 
+describe('refusing a premature or duplicate timer', () => {
+  /**
+   * Observed live. While the cook was still seasoning the chicken, the model
+   * started an eight-minute "chicken cooking" timer for a later step. Two
+   * minutes on they reached that step, which started its own clock, and two
+   * timers were counting the same eight minutes from different moments. The
+   * visible one ran ahead of the pan — a cook trusting it takes the chicken
+   * out early, which is a wrong answer about food.
+   */
+  it('will not time a step the cook has not reached', async () => {
+    const tables = seedTables();
+    const recipe = tables.recipes?.find((row) => row.id === 'aaaaaaaa-0000-4000-8000-000000000001');
+    recipe!.steps = [
+      { text: 'Season the chicken with salt and pepper.', attention: 'active' },
+      { text: 'Cook the chicken for eight minutes.', duration_seconds: 480, attention: 'passive' },
+    ];
+    tables.cooking_sessions![0]!.current_step = 0;
+
+    const { ctx } = await context(tables);
+    const outcome = await executeTool(
+      'start_timer',
+      JSON.stringify({ duration_seconds: 480, label: 'chicken cooking' }),
+      ctx,
+      signal,
+    );
+
+    const data = JSON.parse(outcome.content) as { started: boolean; reason?: string };
+    expect(data.started).toBe(false);
+    expect(data.reason).toBe('not_started_yet');
+    expect(tables.timers ?? []).toHaveLength(0);
+  });
+
+  it('will not start a second timer of the same length', async () => {
+    const { ctx, db } = await context();
+    const args = JSON.stringify({ duration_seconds: 480, label: 'pasta' });
+
+    const first = await executeTool('start_timer', args, ctx, signal);
+    expect(JSON.parse(first.content).started).toBe(true);
+
+    const second = await executeTool('start_timer', args, await refresh(ctx, db), signal);
+    const data = JSON.parse(second.content) as { started: boolean; reason?: string };
+    expect(data.started).toBe(false);
+    expect(data.reason).toBe('already_running');
+  });
+
+  it('still allows a genuinely different timer', async () => {
+    const { ctx, db } = await context();
+    await executeTool('start_timer', JSON.stringify({ duration_seconds: 480, label: 'pasta' }), ctx, signal);
+
+    const other = await executeTool(
+      'start_timer',
+      JSON.stringify({ duration_seconds: 120, label: 'garlic bread' }),
+      await refresh(ctx, db),
+      signal,
+    );
+    expect(JSON.parse(other.content).started).toBe(true);
+  });
+});
+
 describe('step movement', () => {
   it('clamps a step past the end of the recipe instead of failing', async () => {
     const { ctx } = await context();

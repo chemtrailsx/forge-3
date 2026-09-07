@@ -29,9 +29,59 @@ export const startTimerTool = defineTool({
   ),
   filler: ['Setting that now.', 'One moment.'],
   async execute(args, ctx) {
+    const requestedMs = args.duration_seconds * 1000;
+    const running = await listActiveTimers(ctx.db, ctx.state.session.id);
+
+    /*
+     * Refuse a timer for work the cook has not started.
+     *
+     * Observed live: while the cook was still seasoning the chicken, the model
+     * started an eight-minute "chicken cooking" timer for a later step. Two
+     * minutes later they reached that step and it started its own clock, so
+     * two timers were counting the same eight minutes from different moments.
+     * The visible one was ahead of the pan, and a cook trusting it takes the
+     * chicken out early — this is a wrong answer about food, not clutter.
+     *
+     * The prompt asks the model not to. It did anyway, which is what code is
+     * for.
+     */
+    const upcoming = (ctx.state.recipe?.steps ?? []).findIndex(
+      (step, index) =>
+        index > ctx.state.snapshot.currentStep &&
+        step.attention === 'passive' &&
+        step.durationSeconds !== null &&
+        Math.abs(step.durationSeconds * 1000 - requestedMs) <= requestedMs * 0.2,
+    );
+
+    if (upcoming !== -1) {
+      return {
+        data: {
+          started: false,
+          reason: 'not_started_yet',
+          note: `That is step ${upcoming + 1}, which the user has not reached. Its timer starts by itself when they get there — do not set one now. Tell them what to do next instead.`,
+        },
+      };
+    }
+
+    // A second timer of the same length is a duplicate of one already running.
+    const duplicate = running.find(
+      (timer) => Math.abs(timer.durationMs - requestedMs) <= requestedMs * 0.2,
+    );
+    if (duplicate) {
+      return {
+        data: {
+          started: false,
+          reason: 'already_running',
+          label: duplicate.label,
+          remaining: describeDuration(duplicate.remainingMs),
+          note: 'A timer for this is already counting down. Tell the user how long is left rather than starting another.',
+        },
+      };
+    }
+
     const timer = await startTimer(ctx.db, {
       sessionId: ctx.state.session.id,
-      durationMs: args.duration_seconds * 1000,
+      durationMs: requestedMs,
       label: args.label,
     });
     return {
