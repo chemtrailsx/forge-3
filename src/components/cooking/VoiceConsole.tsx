@@ -51,6 +51,7 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
   const [metrics, setMetrics] = useState<TurnMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
+  const [canReplay, setCanReplay] = useState(false);
 
   const clientRef = useRef<VoiceClient | null>(null);
 
@@ -66,7 +67,14 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
 
   useEffect(() => {
     const client = new VoiceClient(sampleRate, sessionId, {
-      onStatus: setStatus,
+      onStatus: (next) => {
+        setStatus(next);
+        // Re-checked here rather than when the text arrives: the transcript
+        // event fires before any audio has been received, so at that point
+        // there is nothing cached to replay yet. Status settles after the
+        // audio does, on every path including an interrupted one.
+        setCanReplay(clientRef.current?.canReplay ?? false);
+      },
       onTranscript: upsert,
       onState: setState,
       onLevel: (rms) => setLevel(rms),
@@ -118,6 +126,10 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
     }
   }
 
+  async function replay() {
+    await clientRef.current?.replayLast();
+  }
+
   async function submitTyped(event: React.FormEvent) {
     event.preventDefault();
     const text = typed.trim();
@@ -148,7 +160,17 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
                 <span className={`badge${status === 'listening' ? ' on' : ''}`}>listening</span>
                 <span className={`badge${status === 'speaking' ? ' on' : ''}`}>speaking</span>
                 <span className={`badge${tool ? ' on' : ''}`}>{tool ?? 'no tool'}</span>
+                <button
+                  type="button"
+                  className="ghost small"
+                  onClick={replay}
+                  disabled={!canReplay}
+                  title="Play the last answer again"
+                >
+                  ↻ Replay
+                </button>
               </div>
+              <div className="small muted">or just say &ldquo;say that again&rdquo;</div>
               {filler ? <div className="small muted">filler: “{filler}”</div> : null}
               {bargeIn !== null ? (
                 <div className="small muted">last interruption stopped audio in {bargeIn} ms</div>

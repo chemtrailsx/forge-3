@@ -6,6 +6,7 @@ import { DEFAULT_VAD, VoiceActivityDetector } from '../audio/vad';
 import type { CookingStateSnapshot } from '../types';
 import { shouldBackchannel } from './backchannel';
 import { parseSseLine, type TurnEvent, type TurnMetrics } from './events';
+import { isReplayRequest } from './replay';
 import { HeardTracker } from './heard-tracker';
 import type { InterruptionReport } from './orchestrator';
 
@@ -32,6 +33,8 @@ export type TranscriptEntry = {
   text: string;
   interrupted?: boolean;
   profile?: string;
+  /** A repeat of something already said, not a new answer. */
+  replay?: boolean;
 };
 
 export type VoiceClientEvents = {
@@ -65,6 +68,9 @@ const NUDGE_POLL_MS = 5000;
  * answering the moment it stops is heard immediately.
  */
 const SPEECH_HOLDOFF_MS = 700;
+
+/** Roughly 40 seconds of 24 kHz mono audio, base64-encoded. */
+const MAX_REPLAY_BYTES = 3_000_000;
 
 export class VoiceClient {
   private player: PcmPlayer;
@@ -101,6 +107,20 @@ export class VoiceClient {
   private nudgeTimer: number | null = null;
   private nudgeInFlight = false;
   private lastNudgeAt: number | null = null;
+
+  /**
+   * The audio of the most recent spoken answer, kept so it can be replayed
+   * verbatim.
+   *
+   * One turn only, and dropped the moment the next one starts: this exists so
+   * a cook who missed a quantity can hear that quantity again, not as a
+   * history feature. A minute of speech is about 3 MB at this rate, so the cap
+   * below is the difference between a convenience and a leak.
+   */
+  private lastSpoken: { contextId: string; pcm: string }[] = [];
+  private lastSpokenText = '';
+  private lastSpokenBytes = 0;
+  private replaying = false;
 
   constructor(
     private readonly sampleRate: number,
@@ -369,9 +389,16 @@ export class VoiceClient {
     await this.player.clear();
     const latencyMs = Math.round(performance.now() - detectedAt);
 
-    const heardText = this.tracker.heardText(this.player.progress());
-    if (this.currentTurnIndex >= 0) {
-      this.pendingInterruption = { turnIndex: this.currentTurnIndex, heardText, latencyMs };
+    if (this.replaying) {
+      // Interrupting a replay is not an interruption of the turn it came
+      // from: that turn finished, and was heard. Recording one would rewrite
+      // its history to a fraction of what the cook actually heard.
+      this.replaying = false;
+    } else {
+      const heardText = this.tracker.heardText(this.player.progress());
+      if (this.currentTurnIndex >= 0) {
+        this.pendingInterruption = { turnIndex: this.currentTurnIndex, heardText, latencyMs };
+      }
     }
 
     this.turnController?.abort();
@@ -442,12 +469,33 @@ export class VoiceClient {
     }
 
     this.events.onTranscript({ id: cryptoId(), role: 'user', text: transcript });
+
+    if (await this.handledAsReplay(transcript)) return;
     await this.runTurn(transcript);
+  }
+
+  /**
+   * Answered from memory rather than by asking the model to repeat itself,
+   * which would paraphrase — see lib/voice/replay.ts.
+   *
+   * Shared by the spoken and typed paths deliberately: they are the same
+   * request, and letting one of them cost a round trip while the other does
+   * not is the kind of difference nobody notices until it is confusing.
+   */
+  private async handledAsReplay(text: string): Promise<boolean> {
+    if (!isReplayRequest(text)) return false;
+    if (!(await this.replayLast())) return false;
+    this.setResting();
+    return true;
   }
 
   private async runTurn(transcript: string): Promise<void> {
     this.setStatus('thinking');
     this.tracker.reset();
+    this.lastSpoken = [];
+    this.lastSpokenText = '';
+    this.lastSpokenBytes = 0;
+    this.replaying = false;
 
     const controller = new AbortController();
     this.turnController = controller;
@@ -531,6 +579,7 @@ export class VoiceClient {
       case 'assistant.text': {
         this.tracker.beginSegment(event.contextId, event.text);
         assistantText = assistantText ? `${assistantText} ${event.text}` : event.text;
+        this.lastSpokenText = assistantText;
         this.events.onTranscript({
           id: assistantId,
           role: 'assistant',
@@ -543,6 +592,13 @@ export class VoiceClient {
         const samples = Math.floor((event.pcm.length * 3) / 4 / 2);
         this.tracker.addSamples(event.contextId, samples);
         this.player.enqueueBase64(event.contextId, event.pcm);
+
+        // Kept so "say that again" can replay the exact audio rather than ask
+        // the model to have another go at the same sentence.
+        if (this.lastSpokenBytes + event.pcm.length <= MAX_REPLAY_BYTES) {
+          this.lastSpoken.push({ contextId: event.contextId, pcm: event.pcm });
+          this.lastSpokenBytes += event.pcm.length;
+        }
         break;
       }
       case 'timestamps':
@@ -564,6 +620,43 @@ export class VoiceClient {
     return { assistantId, assistantText };
   }
 
+  /** Is there an answer to replay? Drives the button's enabled state. */
+  get canReplay(): boolean {
+    return this.lastSpoken.length > 0;
+  }
+
+  /**
+   * Play the last answer again, exactly as it was said.
+   *
+   * From memory, so it is instant and costs nothing — and, more to the point,
+   * it is the same words. Someone who missed "six hundred grams" needs that
+   * number again, not a fresh attempt at the sentence that might phrase it
+   * differently.
+   */
+  async replayLast(): Promise<boolean> {
+    if (this.lastSpoken.length === 0) return false;
+
+    await this.ensureAudio();
+    await this.player.clear();
+
+    this.replaying = true;
+    // Fresh context ids: the played-sample counts feed the heard-transcript
+    // ledger, and a replay must not be mistaken for the original being heard
+    // twice over.
+    for (const chunk of this.lastSpoken) {
+      this.player.enqueueBase64(`replay:${chunk.contextId}`, chunk.pcm);
+    }
+    this.player.flush();
+
+    this.events.onTranscript({
+      id: cryptoId(),
+      role: 'assistant',
+      text: this.lastSpokenText,
+      replay: true,
+    });
+    return true;
+  }
+
   /**
    * Typed input — for a noisy room, a denied microphone, or a demo.
    *
@@ -580,6 +673,7 @@ export class VoiceClient {
     await this.ensureAudio();
     if (this.assistantSpeaking || this.turnController) await this.bargeIn();
     this.events.onTranscript({ id: cryptoId(), role: 'user', text });
+    if (await this.handledAsReplay(text)) return;
     await this.runTurn(text);
   }
 

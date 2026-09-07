@@ -23,6 +23,8 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
                 {entry.role === 'user' ? 'You' : 'Companion'}
                 {entry.profile && entry.profile !== 'normal' ? ` · ${entry.profile}` : ''}
                 {entry.interrupted ? ' · cut off' : ''}
+                {/* So a repeat does not read as the assistant saying something new. */}
+                {entry.replay ? ' · replay' : ''}
               </div>
               {entry.text}
             </div>

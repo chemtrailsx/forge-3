@@ -20,6 +20,7 @@ tools, interruption handling — is this application's job.
 | **Voice fillers during tool calls** — speech instead of dead air | `runTools()` in [`src/lib/voice/orchestrator.ts`](src/lib/voice/orchestrator.ts); wording lives on each tool |
 | **Dynamic speaking speed** — slower for measurements and timers | [`src/lib/tts/speech-profile.ts`](src/lib/tts/speech-profile.ts), [`src/lib/tts/speakable.ts`](src/lib/tts/speakable.ts) |
 | **Persistent cooking context** — recipe, step, servings, subs, timers, corrections | [`src/lib/cooking/state.ts`](src/lib/cooking/state.ts) |
+| **Replay** — hearing the last answer again, verbatim | [`src/lib/voice/replay.ts`](src/lib/voice/replay.ts), `replayLast()` in [`voice-client.ts`](src/lib/voice/voice-client.ts) |
 | **Speaking first** — announcing a pan that finished while you were elsewhere | [`src/lib/voice/nudge.ts`](src/lib/voice/nudge.ts), [`src/app/api/nudge/route.ts`](src/app/api/nudge/route.ts) |
 
 ---
@@ -337,6 +338,17 @@ no extra tooling, since `next dev` and `next build` already differ on NODE_ENV.
 
 If a dev server ever does start throwing `ENOENT ... routes-manifest.json` or
 `Cannot find module './139.js'`, that is this failure: restart it.
+
+### Missing an answer
+
+Say **"say that again"** — or any of the obvious variants — and the last answer is replayed. There is
+also a **Replay** button beside the status badges for when a hand is free.
+
+It replays the cached audio rather than asking the model to repeat itself, which matters three ways:
+the words are *identical* (someone who missed a quantity needs that quantity, not a fresh attempt at
+the sentence), it is instant and costs nothing, and it cannot fail differently at exactly the moment
+the cook is least able to cope with a new answer. The phrase matching is deliberately tight — "repeat
+that" replays, "repeat that but slower" is a real request and goes to the model.
 
 ## Known limitations
 
