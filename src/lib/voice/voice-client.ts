@@ -133,8 +133,7 @@ export class VoiceClient {
    */
   async start(): Promise<void> {
     if (this.running) return;
-    await this.player.init();
-    await this.player.resume();
+    await this.ensureAudio();
 
     this.running = true;
     this.startNudgePolling();
@@ -565,11 +564,29 @@ export class VoiceClient {
     return { assistantId, assistantText };
   }
 
-  /** Typed input, for testing the loop without a microphone. */
+  /**
+   * Typed input — for a noisy room, a denied microphone, or a demo.
+   *
+   * The answer is still spoken. Typing changes how the question arrives, not
+   * what the product is: someone types because they cannot talk right now, not
+   * because they would rather read. Without this the audio was synthesised,
+   * sent, and silently dropped by a player that had never been created,
+   * because only the microphone button used to bring it up.
+   *
+   * Pressing Send is a user gesture, which is exactly what an AudioContext
+   * needs in order to start.
+   */
   async sendText(text: string): Promise<void> {
+    await this.ensureAudio();
     if (this.assistantSpeaking || this.turnController) await this.bargeIn();
     this.events.onTranscript({ id: cryptoId(), role: 'user', text });
     await this.runTurn(text);
+  }
+
+  /** Brings up playback on its own, without requiring the microphone. */
+  private async ensureAudio(): Promise<void> {
+    await this.player.init();
+    await this.player.resume();
   }
 }
 
