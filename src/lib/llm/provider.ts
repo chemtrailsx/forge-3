@@ -1,4 +1,4 @@
-import { llmEnv, type LlmEnv } from '../env';
+import { geminiEnv, groqEnv, llmEnv, type LlmEnv } from '../env';
 import { ProviderError } from '../errors';
 import type {
   ChatMessage,
@@ -177,10 +177,6 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
 
-      // A tool call the model failed to write as valid JSON. This is a
-      // sampling failure, not a request that will never work: the same prompt
-      // usually succeeds on a second attempt, and the alternative is losing
-      // the user's entire turn to a truncated brace.
       if (response.status === 400 && MALFORMED_TOOL_CALL.test(detail)) {
         throw new MalformedToolCallError(detail.slice(0, 200));
       }
@@ -428,6 +424,111 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   }
 }
 
+/**
+ * Two providers, so one vendor having a bad day is not the product having one.
+ *
+ * This is a different failure from a rate limit, which `OpenAiCompatibleProvider`
+ * already handles by waiting or switching model on the same account. This is
+ * the account itself being unusable — the key revoked, the vendor down, the
+ * region unreachable — and the only way through is somebody else's model.
+ *
+ * The rule throughout is **never fail over once the cook has heard something**.
+ * A second provider restarting an answer from the beginning would speak the
+ * first clause twice, which is worse than the error it is trying to hide.
+ */
+export class FallbackLlmProvider implements LlmProvider {
+  constructor(
+    private readonly primary: LlmProvider,
+    private readonly fallback: LlmProvider,
+  ) {}
+
+  get model(): string {
+    return `${this.primary.model} (fallback: ${this.fallback.model})`;
+  }
+
+  async complete(
+    messages: ChatMessage[],
+    tools: ToolSchema[],
+    signal: AbortSignal,
+  ): Promise<ChatResult> {
+    try {
+      return await this.primary.complete(messages, tools, signal);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      console.warn('[llm] Primary LLM provider failed, falling back to backup provider:', error);
+      return await this.fallback.complete(messages, tools, signal);
+    }
+  }
+
+  async *stream(messages: ChatMessage[], signal: AbortSignal): AsyncIterable<string> {
+    let spoke = false;
+    try {
+      for await (const delta of this.primary.stream(messages, signal)) {
+        spoke = true;
+        yield delta;
+      }
+      if (spoke || signal.aborted) return;
+    } catch (error) {
+      if (signal.aborted) return;
+      // Mid-answer: the cook has already heard words. Starting again on
+      // another provider would repeat them, so let the turn end short.
+      if (spoke) throw error;
+      console.warn('[llm] primary stream failed before saying anything; using the fallback', error);
+    }
+
+    for await (const delta of this.fallback.stream(messages, signal)) {
+      yield delta;
+    }
+  }
+
+  /**
+   * The first pass, where the model either answers or picks tools.
+   *
+   * Failing over here is only safe before the first chunk: after that the
+   * orchestrator may already have spoken a clause, or be part-way through
+   * assembling a tool call.
+   */
+  async *streamWithTools(
+    messages: ChatMessage[],
+    tools: ToolSchema[],
+    signal: AbortSignal,
+  ): AsyncIterable<LlmStreamChunk> {
+    let started = false;
+    try {
+      for await (const chunk of this.primary.streamWithTools(messages, tools, signal)) {
+        started = true;
+        yield chunk;
+      }
+      if (started || signal.aborted) return;
+    } catch (error) {
+      if (signal.aborted) return;
+      if (started) throw error;
+      console.warn('[llm] primary first pass failed before emitting; using the fallback', error);
+    }
+
+    for await (const chunk of this.fallback.streamWithTools(messages, tools, signal)) {
+      yield chunk;
+    }
+  }
+}
+
 export function getLlmProvider(): LlmProvider {
+  const gemini = geminiEnv();
+  const groq = groqEnv();
+
+  if (gemini && groq) {
+    const primary = new OpenAiCompatibleProvider(gemini);
+    const fallback = new OpenAiCompatibleProvider(groq);
+    return new FallbackLlmProvider(primary, fallback);
+  }
+
+  if (gemini) {
+    return new OpenAiCompatibleProvider(gemini);
+  }
+
+  if (groq) {
+    return new OpenAiCompatibleProvider(groq);
+  }
+
   return new OpenAiCompatibleProvider(llmEnv());
 }

@@ -8,7 +8,18 @@ import next from 'eslint-config-next';
  * that now holds circular plugin references.
  */
 const config = [
-  { ignores: ['.next/**', '.next-build/**', 'node_modules/**', 'next-env.d.ts'] },
+  {
+    ignores: [
+      '.next/**',
+      '.next-build/**',
+      'node_modules/**',
+      'next-env.d.ts',
+      // Throwaway scripts for poking at a provider's API — "which models does
+      // this key actually serve?" and the like. Useful to keep, not part of the
+      // application, and not worth holding to the app's type strictness.
+      'scratch/**',
+    ],
+  },
   ...next,
   {
     // Scoped to TypeScript, because the @typescript-eslint plugin is only in

@@ -17,5 +17,6 @@ node_modules
 
 # Not part of the deployed application.
 tests
+scratch
 scripts/verify-*.ts
 coverage

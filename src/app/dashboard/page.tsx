@@ -32,48 +32,73 @@ export default async function DashboardPage() {
     <main className="page">
       <TopBar email={ctx.email} current="cook" />
 
-      {/*
-        The main way in. You do not pick a recipe first — you start talking and
-        say what you feel like making, and the assistant writes the recipe
-        around what you have. The saved list below is for coming back to
-        something, not the price of entry.
-      */}
-      <section className="card" style={{ marginBottom: 18 }}>
-        <div className="spread" style={{ alignItems: 'flex-start' }}>
-          <div>
-            <h2 style={{ marginBottom: 4 }}>What are you making?</h2>
-            <p className="muted small" style={{ margin: 0, maxWidth: 460 }}>
-              Start a session and just say it — &ldquo;I want to make pasta for three&rdquo;. Tell it
-              what you have and what you don&rsquo;t, and it will work around you. It keeps track of
-              anything left on the heat and tells you when to come back.
+      {/* Hero card */}
+      <section
+        className="card"
+        style={{
+          marginBottom: 24,
+          background: 'linear-gradient(135deg, #FFFFFF 0%, #FAF6F0 100%)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-md)',
+          padding: '32px 32px',
+          borderRadius: 'var(--radius-xl)',
+        }}
+      >
+        <div className="spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
+          <div style={{ maxWidth: 560 }}>
+            <div className="badge on" style={{ marginBottom: 12 }}>
+              Voice-First Kitchen Studio
+            </div>
+            <h2 style={{ fontSize: '1.75rem', marginBottom: 8, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+              What are you cooking today?
+            </h2>
+            <p className="muted" style={{ margin: 0, fontSize: '0.94rem', lineHeight: 1.6 }}>
+              Start a hands-free voice session &mdash; describe ingredients you have,
+              get intelligent step-by-step guidance, and manage active timers on the fly.
             </p>
           </div>
-          <StartCookingButton label="Start cooking" />
+          <div>
+            <StartCookingButton label="Start New Session" />
+          </div>
         </div>
       </section>
 
       <div className="grid two">
         <section className="card">
-          <h3>Your recipes</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <div className="section-label">Cookbook</div>
+              <h3 style={{ margin: 0 }}>Saved Recipes</h3>
+            </div>
+            <span className="badge">{recipes.length} total</span>
+          </div>
+
           {recipes.length === 0 ? (
-            <p className="muted small">
-              Nothing saved yet. Anything you cook can be kept for next time — just ask.
-            </p>
+            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)' }}>
+              <p className="small" style={{ margin: 0 }}>
+                No recipes saved yet.
+              </p>
+              <p className="muted small" style={{ marginTop: 4, marginBottom: 0 }}>
+                Anything you cook can be saved for future sessions &mdash; just ask your companion.
+              </p>
+            </div>
           ) : (
             <ul className="plain">
               {recipes.map((recipe) => (
-                <li key={recipe.id} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                  <div className="spread">
-                    <strong>{recipe.title}</strong>
-                    <span className="muted small">
-                      serves {recipe.servings} · {recipe.steps.length} steps
+                <li key={recipe.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, padding: '14px 16px' }}>
+                  <div className="spread" style={{ alignItems: 'flex-start' }}>
+                    <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>{recipe.title}</strong>
+                    <span className="badge" style={{ fontSize: '0.72rem' }}>
+                      serves {recipe.servings} &middot; {recipe.steps.length} steps
                     </span>
                   </div>
-                  <p className="muted small" style={{ margin: '4px 0 8px' }}>
+                  <p className="muted small" style={{ margin: 0, lineHeight: 1.4 }}>
                     {recipe.ingredients.slice(0, 4).map(formatIngredient).join(', ')}
                     {recipe.ingredients.length > 4 ? '…' : ''}
                   </p>
-                  <StartCookingButton recipeId={recipe.id} label="Cook this" variant="plain" />
+                  <div style={{ marginTop: 4 }}>
+                    <StartCookingButton recipeId={recipe.id} label="Cook this recipe" variant="plain" />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -81,26 +106,38 @@ export default async function DashboardPage() {
         </section>
 
         <section className="card">
-          <h3>Recent cooking</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <div className="section-label">History</div>
+              <h3 style={{ margin: 0 }}>Recent Cooking</h3>
+            </div>
+            <span className="badge">{resumable.length} active</span>
+          </div>
+
           {resumable.length === 0 ? (
-            <p className="muted">Nothing in progress.</p>
+            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)' }}>
+              <p className="small" style={{ margin: 0 }}>
+                No active cooking sessions.
+              </p>
+              <p className="muted small" style={{ marginTop: 4, marginBottom: 0 }}>
+                Start a session to begin your culinary journey.
+              </p>
+            </div>
           ) : (
             <ul className="plain">
               {resumable.map((session) => (
-                <li key={session.id}>
+                <li key={session.id} style={{ padding: '14px 16px' }}>
                   <div>
-                    <div>
-                      <strong>
-                        {session.recipeId ? (titles.get(session.recipeId) ?? 'Recipe') : 'Session'}
-                      </strong>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {session.recipeId ? (titles.get(session.recipeId) ?? 'Recipe') : 'Open Session'}
                     </div>
                     <span className="muted small">
-                      step {session.currentStep + 1}
-                      {session.notes.servings ? ` · for ${session.notes.servings}` : ''} ·{' '}
+                      Step {session.currentStep + 1}
+                      {session.notes.servings ? ` &middot; for ${session.notes.servings}` : ''} &middot;{' '}
                       {new Date(session.updatedAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <Link className="button" href={`/cook/${session.id}`}>
+                  <Link className="button" href={`/cook/${session.id}`} style={{ padding: '6px 14px', fontSize: '0.82rem' }}>
                     Resume
                   </Link>
                 </li>

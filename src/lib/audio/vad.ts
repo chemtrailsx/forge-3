@@ -48,18 +48,26 @@ export type VadConfig = {
 };
 
 export const DEFAULT_VAD: VadConfig = {
-  onsetMultiplier: 3.0,
-  // Roughly double, found by watching it answer itself.
-  duckedMultiplier: 6.0,
-  minRms: 0.012,
+  onsetMultiplier: 3.5,
+  // Tuned against real speaker bleed rather than guessed; see the absolute
+  // floor in `push`, which is the other half of the same fix.
+  duckedMultiplier: 12.0,
+  minRms: 0.015,
   // Short, because this is also the barge-in trigger: every millisecond here
-  // is a millisecond the assistant keeps talking over the user.
-  onsetMs: 140,
+  // is a millisecond the assistant keeps talking over the user. While it is
+  // speaking, `push` requires a longer onset instead.
+  onsetMs: 80,
   /*
    * Long enough to survive the pauses in ordinary speech — "give me… two
    * minutes" — and the beat someone leaves while looking at a pan. At 700 ms
    * this cut people off mid-sentence, and every truncation costs a whole
    * round trip to recover from.
+   *
+   * Kept long deliberately, even though a short hangover is the obvious way to
+   * cut the wait: `eagerEndpointMs` below buys the same time back without
+   * truncating anyone, by transcribing during the hangover rather than
+   * shortening it. The two settings are a pair — shortening this one to chase
+   * latency undoes the reason it is long and gains nothing.
    */
   hangoverMs: 1100,
   floorAdapt: 0.05,
@@ -144,8 +152,20 @@ export class VoiceActivityDetector {
     const multiplier = assistantSpeaking
       ? this.config.duckedMultiplier
       : this.config.onsetMultiplier;
-    const threshold = Math.max(this.config.minRms, this.noiseFloor * multiplier);
-    const loud = rms > threshold;
+    // When assistant is speaking through laptop speakers, echo bleed reaches 0.05-0.15 RMS.
+    // Raise the floor requirement to 0.20 RMS and onset to 180ms so speaker audio never trips barge-in,
+    // while real deliberate user interruption (> 0.25 RMS) still interrupts cleanly.
+    const minThreshold = assistantSpeaking
+      ? Math.max(this.config.minRms * 12.0, 0.20)
+      : this.config.minRms;
+    const baseThreshold = Math.max(minThreshold, this.noiseFloor * multiplier);
+    // When actively speaking, audio must stay above background voice level to count as speech.
+    // If it drops to slight ambient noise (< 30% of the speaker's peak), treat it as silence
+    // so background noise does not prevent the turn from finishing.
+    const speechThreshold = this.speaking
+      ? Math.max(baseThreshold, this.peak * 0.28)
+      : baseThreshold;
+    const loud = rms > speechThreshold;
 
     // The floor only tracks quiet windows, and never while the assistant is
     // talking — adapting to its own voice would raise the floor until a real
@@ -153,6 +173,10 @@ export class VoiceActivityDetector {
     if (!loud && !assistantSpeaking) {
       this.noiseFloor += (rms - this.noiseFloor) * this.config.floorAdapt;
     }
+
+    const requiredOnsetMs = assistantSpeaking
+      ? Math.max(this.config.onsetMs, 180)
+      : this.config.onsetMs;
 
     if (loud) {
       this.aboveMs += windowMs;
@@ -164,7 +188,7 @@ export class VoiceActivityDetector {
       }
       // Speech resumed, so whatever was started at the pause is stale.
       this.pausedAnnounced = false;
-      if (!this.speaking && this.aboveMs >= this.config.onsetMs) {
+      if (!this.speaking && this.aboveMs >= requiredOnsetMs) {
         this.speaking = true;
         this.speechMs = this.aboveMs;
         this.voicedMs = this.aboveMs;

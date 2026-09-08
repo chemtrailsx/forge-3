@@ -28,6 +28,8 @@ export class PcmPlayer {
     return this.context;
   }
 
+  private drainTimer: number | null = null;
+
   async init(): Promise<void> {
     if (this.context) return;
 
@@ -45,6 +47,11 @@ export class PcmPlayer {
         // Trimmed from 180 ms once the end-of-turn flush existed: the flush
         // covers the case the larger cushion was protecting against, so the
         // rest is latency the cook pays on every single reply.
+        //
+        // Not trimmed further to 60 ms, which was tried on a branch: audible
+        // stuttering mid-word is a complaint this project has already had once,
+        // and 50 ms off the start of a reply is not worth risking it. Worth
+        // revisiting with a measurement of real chunk arrival spacing.
         minBufferSamples: Math.round(this.sampleRate * 0.11),
       },
     });
@@ -57,13 +64,26 @@ export class PcmPlayer {
         | { type: 'playing' | 'drained' | 'cleared' }
         | { type: 'played'; total: number; byContext: Record<string, number> };
 
-      if (message.type === 'playing') this.events.onPlayingChange?.(true);
-      else if (message.type === 'drained' || message.type === 'cleared') {
-        if (message.type === 'cleared') {
-          const resolve = this.pendingClear;
-          this.pendingClear = null;
-          resolve?.();
+      if (message.type === 'playing') {
+        if (this.drainTimer !== null) {
+          clearTimeout(this.drainTimer);
+          this.drainTimer = null;
         }
+        this.events.onPlayingChange?.(true);
+      } else if (message.type === 'drained') {
+        if (this.drainTimer !== null) clearTimeout(this.drainTimer);
+        this.drainTimer = window.setTimeout(() => {
+          this.drainTimer = null;
+          this.events.onPlayingChange?.(false);
+        }, 150);
+      } else if (message.type === 'cleared') {
+        if (this.drainTimer !== null) {
+          clearTimeout(this.drainTimer);
+          this.drainTimer = null;
+        }
+        const resolve = this.pendingClear;
+        this.pendingClear = null;
+        resolve?.();
         this.events.onPlayingChange?.(false);
       } else if (message.type === 'played') {
         this.lastProgress = message.byContext;

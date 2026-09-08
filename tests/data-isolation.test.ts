@@ -172,7 +172,10 @@ describe('middleware placement', () => {
     }
   });
 
-  it('does not run the middleware on API routes, and does run it on pages', async () => {
+  // Importing the real module pulls in `next/server` and the Supabase SSR
+  // client, which is slow to transform once and worth it: this asserts on the
+  // matcher Next actually loads, not on a copy of it in the test.
+  it('does not run the middleware on API routes, and does run it on pages', { timeout: 30_000 }, async () => {
     const { config } = await import('@/middleware');
     const pattern = new RegExp(`^${String(config.matcher[0])}$`);
 

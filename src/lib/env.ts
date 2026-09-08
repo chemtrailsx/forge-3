@@ -93,13 +93,89 @@ const llmSchema = z.object({
 
 export type LlmEnv = z.infer<typeof llmSchema>;
 
+/**
+ * The model to fall back to when the configured one is rate limited.
+ *
+ * Same vendor, same key, smaller sibling: the free tier meters each model
+ * separately, so this is usually open when the primary is not. It has to be a
+ * model the account actually serves — `npm run preflight` checks that, because
+ * a fallback that 404s is worse than no fallback at all.
+ */
+function fallbackFor(baseUrl: string): string {
+  if (baseUrl.includes('googleapis.com')) return 'gemini-2.5-flash-lite';
+  return 'openai/gpt-oss-20b';
+}
+
 export function llmEnv(): LlmEnv {
+  const apiKey =
+    process.env.LLM_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    '';
+
+  const baseUrl =
+    process.env.LLM_BASE_URL ||
+    (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || apiKey.startsWith('AIza')
+      ? 'https://generativelanguage.googleapis.com/v1beta/openai/'
+      : 'https://api.groq.com/openai/v1');
+
+  const isGemini = baseUrl.includes('googleapis.com') || apiKey.startsWith('AIza');
+  const isGroq = baseUrl.includes('groq.com') || apiKey.startsWith('gsk_');
+
+  /*
+   * The larger model is the default again. It was dropped to the small one to
+   * dodge rate limits; those are now survivable — a limit is waited out or
+   * answered on `fallbackModel` — and the larger model gives noticeably better
+   * cooking answers, which is what the cook actually notices.
+   */
+  const defaultModel = isGemini
+    ? 'gemini-2.5-flash'
+    : isGroq
+      ? 'openai/gpt-oss-120b'
+      : 'gpt-4o-mini';
+
+  const model = process.env.LLM_MODEL || process.env.GEMINI_MODEL || process.env.GROQ_MODEL || defaultModel;
+
+
   return llmSchema.parse({
-    apiKey: process.env.LLM_API_KEY,
-    model: process.env.LLM_MODEL || undefined,
-    fallbackModel: process.env.LLM_FALLBACK_MODEL || undefined,
-    baseUrl: process.env.LLM_BASE_URL || undefined,
+    apiKey,
+    model,
+    fallbackModel: process.env.LLM_FALLBACK_MODEL || fallbackFor(baseUrl),
+    baseUrl,
   });
+}
+
+export function geminiEnv(): LlmEnv | null {
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    (process.env.LLM_BASE_URL?.includes('googleapis.com') ? process.env.LLM_API_KEY : undefined) ||
+    (process.env.LLM_API_KEY?.startsWith('AIza') ? process.env.LLM_API_KEY : undefined);
+
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    model: process.env.GEMINI_MODEL || (process.env.LLM_MODEL?.startsWith('gemini') ? process.env.LLM_MODEL : 'gemini-2.5-flash'),
+    fallbackModel: process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash-lite',
+    baseUrl: process.env.GEMINI_BASE_URL || (process.env.LLM_BASE_URL?.includes('googleapis.com') ? process.env.LLM_BASE_URL : 'https://generativelanguage.googleapis.com/v1beta/openai/'),
+  };
+}
+
+export function groqEnv(): LlmEnv | null {
+  const apiKey =
+    process.env.GROQ_API_KEY ||
+    process.env.FALLBACK_LLM_API_KEY ||
+    (process.env.LLM_BASE_URL?.includes('groq.com') ? process.env.LLM_API_KEY : undefined) ||
+    (process.env.LLM_API_KEY?.startsWith('gsk_') ? process.env.LLM_API_KEY : undefined);
+
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    model: process.env.GROQ_MODEL || (process.env.LLM_MODEL?.includes('gpt-oss') ? process.env.LLM_MODEL : 'openai/gpt-oss-120b'),
+    fallbackModel: process.env.LLM_FALLBACK_MODEL || 'openai/gpt-oss-20b',
+    baseUrl: process.env.GROQ_BASE_URL || (process.env.LLM_BASE_URL?.includes('groq.com') ? process.env.LLM_BASE_URL : 'https://api.groq.com/openai/v1'),
+  };
 }
 
 const sttSchema = z.object({
@@ -111,8 +187,14 @@ const sttSchema = z.object({
 export type SttEnv = z.infer<typeof sttSchema>;
 
 export function sttEnv(): SttEnv {
+  const apiKey =
+    process.env.STT_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    process.env.FALLBACK_LLM_API_KEY ||
+    (process.env.LLM_API_KEY?.startsWith('gsk_') ? process.env.LLM_API_KEY : process.env.LLM_API_KEY);
+
   return sttSchema.parse({
-    apiKey: process.env.STT_API_KEY,
+    apiKey,
     model: process.env.STT_MODEL || undefined,
     endpoint: process.env.STT_ENDPOINT || undefined,
   });

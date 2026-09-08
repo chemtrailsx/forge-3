@@ -70,21 +70,29 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     },
   );
 
+  const { pathname } = request.nextUrl;
+
+  /*
+   * API routes authenticate themselves, in `requireUser()`, which validates the
+   * JWT with the auth server and — in a route handler, unlike a server
+   * component — can write the refreshed cookie back. Doing it here as well
+   * meant every API call asked the same question twice, which is most of a
+   * second in front of every spoken reply.
+   *
+   * The matcher in `src/middleware.ts` already keeps this function from running
+   * for `/api` at all, so in normal operation this branch is never reached.
+   * It stays as the second half of the same guarantee: if the matcher is ever
+   * widened back, the cost does not quietly return with it.
+   */
+  if (pathname.startsWith('/api/')) {
+    return response;
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-
   if (!user && !isPublic(pathname)) {
-    // API callers get a JSON 401; the mic loop must not try to parse a login
-    // page as an event stream.
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { error: { code: 'unauthorized', message: 'You must be signed in.' } },
-        { status: 401 },
-      );
-    }
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
