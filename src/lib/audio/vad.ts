@@ -35,6 +35,13 @@ export type VadConfig = {
   /** Speech shorter than this was a noise, not a sentence. */
   minVoicedMs: number;
   /**
+   * How much of the onset threshold is enough to *stay* in speech.
+   *
+   * Below 1 by definition: a detector that needs as much energy to continue as
+   * it needed to start truncates ordinary sentences at their quiet syllables.
+   */
+  releaseRatio: number;
+  /**
    * Silence after which transcription may start, before the turn has ended.
    *
    * The hangover has to be long enough to survive the pause in "give me…​ two
@@ -71,6 +78,12 @@ export const DEFAULT_VAD: VadConfig = {
    */
   hangoverMs: 1100,
   floorAdapt: 0.05,
+  /*
+   * Enough headroom for the dynamic range of a sentence, not so much that the
+   * detector never lets go. 0.6 keeps quiet syllables inside the turn while a
+   * genuine stop still falls through within a window or two.
+   */
+  releaseRatio: 0.6,
   /*
    * A clip below this is a cupboard door or a lid. It matters more than it
    * sounds: transcribers do not return an empty string for a fragment of
@@ -159,13 +172,30 @@ export class VoiceActivityDetector {
       ? Math.max(this.config.minRms * 12.0, 0.20)
       : this.config.minRms;
     const baseThreshold = Math.max(minThreshold, this.noiseFloor * multiplier);
-    // When actively speaking, audio must stay above background voice level to count as speech.
-    // If it drops to slight ambient noise (< 30% of the speaker's peak), treat it as silence
-    // so background noise does not prevent the turn from finishing.
-    const speechThreshold = this.speaking
-      ? Math.max(baseThreshold, this.peak * 0.28)
-      : baseThreshold;
-    const loud = rms > speechThreshold;
+    /*
+     * Hysteresis: it takes less to stay in speech than it took to enter it.
+     *
+     * Speech is not level. A stressed syllable can be several times the energy
+     * of the unstressed one beside it, people trail off at the end of a phrase,
+     * and there is near-silence between words. A detector that demands the
+     * same energy throughout hears all of that as the end of the turn and cuts
+     * the speaker off mid-sentence.
+     *
+     * This replaces a threshold keyed to the loudest window of the utterance,
+     * which had the relationship backwards: because that peak never decayed, a
+     * single emphatic word — or a pan lid — raised the bar for every quieter
+     * word after it, and the quieter half of an ordinary sentence was read as
+     * silence. Keying the release to the same adaptive floor as the onset
+     * keeps the protection against steady background noise, without it.
+     *
+     * Not applied while the assistant is talking: there the threshold is an
+     * echo guard, and lowering it would let the speakers interrupt it.
+     */
+    const threshold =
+      this.speaking && !assistantSpeaking
+        ? baseThreshold * this.config.releaseRatio
+        : baseThreshold;
+    const loud = rms > threshold;
 
     // The floor only tracks quiet windows, and never while the assistant is
     // talking — adapting to its own voice would raise the floor until a real

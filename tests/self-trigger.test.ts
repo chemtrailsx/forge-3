@@ -208,3 +208,69 @@ describe('being cut off mid-sentence', () => {
     expect(feed(vad, 0.003, DEFAULT_VAD.hangoverMs + 200)).toContain('speech-end');
   });
 });
+
+/**
+ * Reported from a real kitchen: "it is stopping the listening and starting
+ * processing in the middle of me speaking."
+ *
+ * The cause was a threshold keyed to the loudest window of the utterance. One
+ * emphatic word set a bar that the quiet half of the same sentence could not
+ * clear, so the detector called it silence and ended the turn while the cook
+ * was still talking.
+ */
+describe('the quiet half of a sentence', () => {
+  const feed = (vad: VoiceActivityDetector, rms: number, ms: number) => {
+    const events: Array<string | null> = [];
+    for (let elapsed = 0; elapsed < ms; elapsed += 20) events.push(vad.push(rms, 20));
+    return events.filter(Boolean);
+  };
+
+  it('keeps the turn open when the speaker drops after an emphatic word', () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, 0.004, 1000);
+
+    // "I want to make WHITE SAUCE chicken pasta" — the stressed syllables are
+    // several times the energy of the rest, and the rest runs on well past the
+    // hangover. Under the old gate this whole stretch counted as silence, so
+    // the turn was transcribed and answered while the cook was still speaking.
+    feed(vad, 0.42, 400);
+    const quieter = feed(vad, 0.09, DEFAULT_VAD.hangoverMs + 400);
+
+    // 0.09 is under a quarter of that peak and still plainly speech.
+    expect(quieter).not.toContain('speech-end');
+    // Nor may it announce a pause: that is what starts transcribing early.
+    expect(quieter).not.toContain('speech-pause');
+    expect(vad.isSpeaking).toBe(true);
+  });
+
+  it('is not left deaf for the rest of the utterance by one loud noise', () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, 0.004, 1000);
+    feed(vad, 0.2, 400);
+
+    // A pan lid goes down mid-sentence.
+    feed(vad, 0.9, 60);
+
+    // The cook carries on at their normal level, which must still count —
+    // for longer than the hangover, or the lid has ended their sentence.
+    const after = feed(vad, 0.18, DEFAULT_VAD.hangoverMs + 400);
+    expect(after).not.toContain('speech-end');
+    expect(after).not.toContain('speech-pause');
+    expect(vad.isSpeaking).toBe(true);
+  });
+
+  it('still ends the turn when they actually stop', () => {
+    const vad = new VoiceActivityDetector();
+    feed(vad, 0.004, 1000);
+    feed(vad, 0.3, 500);
+    expect(feed(vad, 0.002, DEFAULT_VAD.hangoverMs + 200)).toContain('speech-end');
+  });
+
+  it('takes more to start than to continue, which is the whole point', () => {
+    const quiet = new VoiceActivityDetector();
+    feed(quiet, 0.004, 1000);
+    // Below the onset bar: this must not open a turn on its own.
+    expect(feed(quiet, 0.013, 600)).toEqual([]);
+    expect(quiet.isSpeaking).toBe(false);
+  });
+});

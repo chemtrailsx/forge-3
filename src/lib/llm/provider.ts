@@ -74,6 +74,16 @@ const TOOL_CALL_TOKENS = 1400;
 const MAX_RATE_LIMIT_WAIT_MS = 2500;
 
 /**
+ * How long to wait when *both* models are metered out and the only other
+ * option is failing the turn.
+ *
+ * Longer than anyone would choose, and still the better trade: the cook has
+ * heard a filler and is waiting, and this is the difference between the answer
+ * arriving late and the session ending.
+ */
+const LAST_RESORT_WAIT_MS = 6000;
+
+/**
  * How long the provider asked us to wait, in milliseconds.
  *
  * `retry-after` is seconds by convention but arrives fractional from some
@@ -168,10 +178,33 @@ export class OpenAiCompatibleProvider implements LlmProvider {
 
     if (response.status === 429 && this.config.fallbackModel !== this.config.model) {
       const fallback = await this.send(this.config.fallbackModel, body, signal);
-      // Only if it actually helped: a 429 from both means the account is out,
-      // and the original response carries the better explanation.
       if (fallback.ok) return fallback;
-      if (fallback.status !== 429) response = fallback;
+      // A non-429 from the fallback is a better explanation than the limit:
+      // a bad key is not something waiting fixes.
+      if (fallback.status !== 429) {
+        response = fallback;
+      } else {
+        /*
+         * Both models are metered out. Before giving up on the turn, wait —
+         * longer than is comfortable, but only if the provider says the limit
+         * lifts soon.
+         *
+         * A cook mid-recipe would rather hear a filler and then an answer than
+         * be told to come back later; being told to come back later ends the
+         * session, and free-tier windows are usually seconds, not minutes.
+         * Bounded, so a daily quota does not turn into a silent stall.
+         */
+        const waits = [retryAfterMs(response), retryAfterMs(fallback)].filter(
+          (ms): ms is number => ms !== null,
+        );
+        const soonest = waits.length > 0 ? Math.min(...waits) : null;
+        if (soonest !== null && soonest <= LAST_RESORT_WAIT_MS) {
+          await sleep(soonest, signal);
+          const retried = await this.send(this.config.model, body, signal);
+          if (retried.ok) return retried;
+          response = retried;
+        }
+      }
     }
 
     if (!response.ok) {

@@ -73,7 +73,16 @@ export function rimeEnv(): RimeEnv {
 
 const llmSchema = z.object({
   apiKey: nonEmpty,
-  model: nonEmpty.default('openai/gpt-oss-120b'),
+  /*
+   * The smaller model is the default, on evidence rather than taste.
+   *
+   * Sampling the larger one from this account, three requests in five came
+   * back 429. Every one of those costs a wasted round trip before the fallback
+   * answers, in front of a cook waiting to be told what to do — and the larger
+   * model's better phrasing is not worth a second of silence on most turns.
+   * `LLM_MODEL` overrides this without a code change if the allowance grows.
+   */
+  model: nonEmpty.default('openai/gpt-oss-20b'),
   /**
    * Used only while the primary model is rate limited.
    *
@@ -87,7 +96,7 @@ const llmSchema = z.object({
    * candidates from other providers' catalogues are not all served here, and a
    * fallback that 404s is worse than none.
    */
-  fallbackModel: nonEmpty.default('openai/gpt-oss-20b'),
+  fallbackModel: nonEmpty.default('openai/gpt-oss-120b'),
   baseUrl: nonEmpty.url().default('https://api.groq.com/openai/v1'),
 });
 
@@ -103,7 +112,7 @@ export type LlmEnv = z.infer<typeof llmSchema>;
  */
 function fallbackFor(baseUrl: string): string {
   if (baseUrl.includes('googleapis.com')) return 'gemini-2.5-flash-lite';
-  return 'openai/gpt-oss-20b';
+  return 'openai/gpt-oss-120b';
 }
 
 export function llmEnv(): LlmEnv {
@@ -123,16 +132,10 @@ export function llmEnv(): LlmEnv {
   const isGemini = baseUrl.includes('googleapis.com') || apiKey.startsWith('AIza');
   const isGroq = baseUrl.includes('groq.com') || apiKey.startsWith('gsk_');
 
-  /*
-   * The larger model is the default again. It was dropped to the small one to
-   * dodge rate limits; those are now survivable — a limit is waited out or
-   * answered on `fallbackModel` — and the larger model gives noticeably better
-   * cooking answers, which is what the cook actually notices.
-   */
   const defaultModel = isGemini
     ? 'gemini-2.5-flash'
     : isGroq
-      ? 'openai/gpt-oss-120b'
+      ? 'openai/gpt-oss-20b'
       : 'gpt-4o-mini';
 
   const model = process.env.LLM_MODEL || process.env.GEMINI_MODEL || process.env.GROQ_MODEL || defaultModel;
@@ -172,8 +175,8 @@ export function groqEnv(): LlmEnv | null {
   if (!apiKey) return null;
   return {
     apiKey,
-    model: process.env.GROQ_MODEL || (process.env.LLM_MODEL?.includes('gpt-oss') ? process.env.LLM_MODEL : 'openai/gpt-oss-120b'),
-    fallbackModel: process.env.LLM_FALLBACK_MODEL || 'openai/gpt-oss-20b',
+    model: process.env.GROQ_MODEL || (process.env.LLM_MODEL?.includes('gpt-oss') ? process.env.LLM_MODEL : 'openai/gpt-oss-20b'),
+    fallbackModel: process.env.LLM_FALLBACK_MODEL || 'openai/gpt-oss-120b',
     baseUrl: process.env.GROQ_BASE_URL || (process.env.LLM_BASE_URL?.includes('groq.com') ? process.env.LLM_BASE_URL : 'https://api.groq.com/openai/v1'),
   };
 }

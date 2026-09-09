@@ -80,8 +80,15 @@ describe('telling the model where the cook is', () => {
     }
   });
 
-  it('forbids reciting the recipe', () => {
-    expect(promptWith({})).toMatch(/Never recite the recipe/i);
+  it('forbids reciting the method', () => {
+    // Narrowed deliberately: reading the *ingredients* out when a dish starts
+    // is now required, because a hands-free cook has no other way to learn
+    // what the dish needs while there is still time to substitute. Reciting
+    // the steps is still forbidden - that is the part they cannot hold in
+    // their head, and they only ever need the next one.
+    const prompt = promptWith({});
+    expect(prompt).toMatch(/Never recite the whole method/i);
+    expect(prompt).toMatch(/several steps at once/i);
   });
 });
 

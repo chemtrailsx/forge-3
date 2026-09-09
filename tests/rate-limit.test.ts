@@ -117,4 +117,33 @@ describe('being rate limited mid-recipe', () => {
 
     expect(models).toEqual(['big-model']);
   });
+  it('waits once more when both models are out but the limit lifts in seconds', async () => {
+    const { models } = stubFetch([
+      { status: 429 },
+      { status: 429, headers: { 'retry-after': '0.05' } },
+      { status: 200 },
+    ]);
+
+    const result = await new OpenAiCompatibleProvider(config).complete([], [], signal());
+
+    // Primary, fallback, then the primary again once the window has passed.
+    expect(models).toEqual(['big-model', 'small-model', 'big-model']);
+    expect(result.content).toBe('Eight minutes.');
+  });
+
+  it('does not stall the kitchen waiting out a limit measured in minutes', async () => {
+    const { models } = stubFetch([
+      { status: 429, headers: { 'retry-after': '900' } },
+      { status: 429, headers: { 'retry-after': '900' } },
+      { status: 200 },
+    ]);
+
+    const error = await new OpenAiCompatibleProvider(config)
+      .complete([], [], signal())
+      .catch((e: unknown) => e);
+
+    // Two attempts and an honest answer, not a silent quarter of an hour.
+    expect(models).toEqual(['big-model', 'small-model']);
+    expect((error as Error).message).toMatch(/minute/i);
+  });
 });
