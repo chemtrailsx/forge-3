@@ -54,7 +54,7 @@ export function StartCookingButton({
       <button className={variant === 'primary' ? 'primary' : ''} onClick={start} disabled={busy}>
         {busy ? 'Starting…' : label}
       </button>
-      {error ? <span className="small" style={{ color: 'var(--danger)' }}>{error}</span> : null}
+      {error ? <span className="small" style={{ color: 'var(--danger-color)' }}>{error}</span> : null}
     </div>
   );
 }

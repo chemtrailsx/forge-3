@@ -366,6 +366,22 @@ button.ghost:hover {
   border-color: rgba(244, 63, 94, 0.2);
 }
 
+/*
+ * Destructive actions. "Forget" throws away something the assistant learned
+ * and there is no undo, so it should not look identical to every other button
+ * — but it is also not the main action on the page, so it stays quiet until
+ * the pointer is on it.
+ */
+button.danger {
+  color: var(--danger-color);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+  border-color: rgba(225, 29, 72, 0.3);
+  color: var(--danger-color);
+}
+
 .pill-tag {
   display: inline-flex;
   align-items: center;
@@ -809,6 +825,29 @@ ul.plain {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/*
+ * A row: label on the left, value on the right.
+ *
+ * Every list in the app is written expecting this — two children per row, and
+ * the ones that want something else override `flex-direction` inline, which
+ * only means anything if the row is a flex container to begin with. Without
+ * this rule the two children simply run together, which is how the profile
+ * came to read "Usual servings4" and "Speechrime", and why every "Forget"
+ * button sat underneath its memory instead of beside it.
+ */
+ul.plain > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Values are right-aligned, and wrap inside their own column when long. */
+ul.plain > li > :last-child:not(:only-child) {
+  text-align: right;
+  min-width: 0;
 }
 
 .ingredient-item {
