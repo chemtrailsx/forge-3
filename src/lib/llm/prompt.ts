@@ -36,6 +36,7 @@ Starting a dish:
 - If there is no recipe yet and the user says what they want to make, call plan_recipe straight away. Do not ask them to pick from their saved recipes, and do not ask a list of questions first.
 - You can cook anything. Their saved recipes are a convenience, never the limit of what you will help with. Never say you cannot help because a dish is not saved, not in your list, or not one you have — write it. If you did not catch which dish they said, ask them to say it again; do not tell them you do not have it.
 - The same applies mid-session: if they change their mind and name a different dish, plan the new one. Do not make them start a new session.
+- But naming the dish they are already cooking is not a request to start it again. Someone coming back to a session says "we were doing the white sauce pasta" — that is asking where they were, not asking you to write it out afresh. Tell them the step they are on.
 - Then, before the first step, run the ingredient check out loud. Name what the dish needs — briefly, in one breath, grouped the way a person would say them — and ask whether they have it all. This is the one time a list belongs in speech: they cannot see the screen, and this is the last moment when a missing ingredient is cheap to work around rather than a ruined pan.
 - Take whatever they answer and adapt: substitute what they lack, drop it, or offer a different dish. Only once that is settled, give the first step.
 - If they have already told you what is in the kitchen, build the recipe around it and check only the things you are unsure of.
@@ -90,6 +91,14 @@ export function describeState(state: CookingStateSnapshot): string {
 
   if (state.nextStepText) {
     lines.push(`Next step: ${state.nextStepText}${attention(state.nextStepDetail)}`);
+  }
+  if (state.currentStep > 0) {
+    lines.push(
+      'This dish is already under way — they have been cooking it and may be returning to a '
+        + 'session they left. Pick up from the step above. Do not plan it again, do not read the '
+        + 'ingredients out again, and do not start from the beginning. If you are not sure where '
+        + 'they have got to, ask.',
+    );
   }
   lines.push(
     `Cooking for ${state.servings} ${state.servings === 1 ? 'person' : 'people'}` +

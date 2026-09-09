@@ -108,6 +108,9 @@ export const jsonSchema = Object.assign(objectSchema, {
   integer(description: string): Record<string, unknown> {
     return { type: 'integer', description };
   },
+  boolean(description: string): Record<string, unknown> {
+    return { type: 'boolean', description };
+  },
   array(items: Record<string, unknown>, description: string): Record<string, unknown> {
     return { type: 'array', items, description };
   },

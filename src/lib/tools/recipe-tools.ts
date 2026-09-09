@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isSameDish } from '../cooking/same-dish';
 import { formatIngredient, scaleIngredients } from '../cooking/scale';
 import { findSubstitution } from '../cooking/substitutions';
 import { patchSession, recordSubstitution, setServings } from '../cooking/state';
@@ -258,9 +259,16 @@ const plannedStepSchema = jsonSchema(
 export const planRecipeTool = defineTool({
   name: 'plan_recipe',
   description:
-    "Write a recipe for a dish the user asked to cook, and make it the recipe for the current session. Use this the moment they say what they want to make — 'I want to make pasta', 'let's do a stir fry' — unless they clearly meant one of their own saved recipes. Take their stated ingredients, equipment and preferences into account.",
+    "Write a recipe for a dish the user asked to cook, and make it the recipe for the current session. Use this the moment they say what they want to make — 'I want to make pasta', 'let's do a stir fry' — unless they clearly meant one of their own saved recipes. Take their stated ingredients, equipment and preferences into account. Do NOT call this to resume or recap a dish that is already under way: it replaces the session's recipe and sends the cook back to step one. Set replaces_current_dish only when they have asked to abandon what they are cooking and start something else.",
   schema: recipeInputSchema.extend({
     servings: z.number().int().min(1).max(50).default(2),
+    /**
+     * Consent to throwing away a dish in progress.
+     *
+     * The model has to say so deliberately; without it, a session already
+     * under way is left alone. See `execute`.
+     */
+    replaces_current_dish: z.boolean().default(false),
   }),
   parameters: jsonSchema(
     {
@@ -276,11 +284,66 @@ export const planRecipeTool = defineTool({
         'The method in order. Mark every step that runs by itself as passive and give it a duration, '
           + 'so the cook can be sent off to do something else and called back at the right time.',
       ),
+      replaces_current_dish: jsonSchema.boolean(
+        'True only when the user has said they want to stop cooking the dish already in progress '
+          + 'and start a different one. Never true when they are resuming, asking where they were, '
+          + 'or naming the dish they are already making.',
+      ),
     },
     ['title', 'ingredients', 'steps'],
   ),
   filler: ['Right, let me put that together.', 'Give me a second to work that out.'],
   async execute(args, ctx) {
+    /*
+     * Guard against restarting a dish someone is in the middle of.
+     *
+     * This tool replaces the session's recipe and sets the step back to one,
+     * which is right when a dish is being chosen and catastrophic when one is
+     * under way — a cook resuming a session, or simply naming the dish they
+     * are already cooking, was being sent back to the boiling water with
+     * everything they had done forgotten.
+     *
+     * A resumed session is the common case: the cook says "we were making
+     * white sauce pasta", which reads exactly like asking for it to be
+     * planned. So the same dish never re-plans, and a different one has to be
+     * asked for deliberately.
+     */
+    const current = ctx.state.recipe;
+    const underway = current !== null && ctx.state.session.currentStep > 0;
+
+    if (underway && isSameDish(args.title, current.title)) {
+      return {
+        data: {
+          planned: false,
+          reason: 'already_cooking_this',
+          title: current.title,
+          on_step: ctx.state.session.currentStep + 1,
+          of_steps: current.steps.length,
+          step_text: current.steps[ctx.state.session.currentStep]?.text ?? null,
+          note:
+            'They are already part-way through this dish. Do not plan it again and do not read the '
+            + 'ingredients out. Pick up where they left off — say which step they are on, or ask '
+            + 'them where they got to if that looks wrong.',
+        },
+      };
+    }
+
+    if (underway && !args.replaces_current_dish) {
+      return {
+        data: {
+          planned: false,
+          reason: 'dish_in_progress',
+          current_dish: current.title,
+          on_step: ctx.state.session.currentStep + 1,
+          of_steps: current.steps.length,
+          note:
+            `They are on step ${ctx.state.session.currentStep + 1} of ${current.title}. Ask whether `
+            + 'they want to abandon it and start the new dish. Only if they say yes, call this again '
+            + 'with replaces_current_dish set to true.',
+        },
+      };
+    }
+
     const recipe = await createRecipe(ctx.db, { ...args, source: 'planned' });
 
     // Attaching it to the live session is the point of the tool: the user said
