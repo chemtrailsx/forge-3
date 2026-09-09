@@ -10,7 +10,7 @@ import {
   searchUserRecipesTool,
   suggestSubstitutionTool,
 } from './recipe-tools';
-import { saveUserPreferenceTool, setCurrentStepTool } from './session-tools';
+import { closeRecipeTool, saveUserPreferenceTool, setCurrentStepTool } from './session-tools';
 import { getTimerStatusTool, startTimerTool } from './timer-tools';
 import type { ToolContext, ToolDefinition } from './types';
 
@@ -33,6 +33,7 @@ export const TOOLS: ToolDefinition[] = [
   saveRecipeTool,
   saveUserPreferenceTool,
   setCurrentStepTool,
+  closeRecipeTool,
 ];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

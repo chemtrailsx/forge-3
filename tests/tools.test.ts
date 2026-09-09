@@ -23,6 +23,10 @@ describe('tool surface', () => {
     const names = TOOLS.map((tool) => tool.name).sort();
     expect(names).toEqual(
       [
+        // Not in the original nine either: the way to say "I have given up on
+        // this one" without losing the session, and the escape hatch that
+        // makes refusing to overwrite a dish in progress safe.
+        'close_recipe',
         'get_recent_cooking_sessions',
         'get_recipe',
         'get_timer_status',

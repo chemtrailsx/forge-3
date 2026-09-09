@@ -175,3 +175,71 @@ describe('coming back to a conversation, not a blank page', () => {
     expect(await recentTurns(db, ALICE_SESSION, 20)).toEqual([]);
   });
 });
+
+describe('putting a dish away', () => {
+  /*
+   * Reported: "add option to close the recipe/stop the recipe which makes u go
+   * back to step 0". It is also the escape hatch that makes the guard on
+   * re-planning safe — there has to be a way to say "I have given up on this"
+   * that does not involve losing the session.
+   */
+  it('empties the session and goes back to the beginning', async () => {
+    const { ctx, tables } = await contextFor();
+    const result = await executeTool('close_recipe', '{}', ctx, signal());
+    const data = JSON.parse(result.content) as Record<string, unknown>;
+
+    expect(data.closed).toBe(true);
+    expect(data.was).toBe('Weeknight Garlic Butter Pasta');
+
+    const after = tables.cooking_sessions?.find((row) => row.id === ALICE_SESSION);
+    expect(after?.recipe_id).toBeNull();
+    expect(after?.current_step).toBe(0);
+    expect(result.stateChanged).toBe(true);
+  });
+
+  it('keeps the recipe itself — only the session lets go', async () => {
+    const { ctx, tables } = await contextFor();
+    await executeTool('close_recipe', '{}', ctx, signal());
+
+    // Written for this cook and still theirs; closing a session is not a
+    // reason to lose it.
+    expect(tables.recipes?.some((row) => row.id === ALICE_RECIPE)).toBe(true);
+  });
+
+  it('lets the next dish be planned freely once the session is empty', async () => {
+    const { db, tables } = await contextFor();
+    const closeCtx = {
+      db,
+      state: await loadCookingState(db, ALICE_SESSION),
+      reload: () => loadCookingState(db, ALICE_SESSION),
+    };
+    await executeTool('close_recipe', '{}', closeCtx, signal());
+
+    // A fresh context, as the next turn would build.
+    const planCtx = {
+      db,
+      state: await loadCookingState(db, ALICE_SESSION),
+      reload: () => loadCookingState(db, ALICE_SESSION),
+    };
+    const planned = await executeTool(
+      'plan_recipe',
+      JSON.stringify({ ...RECIPE_ARGS, title: 'Chicken Biryani' }),
+      planCtx,
+      signal(),
+    );
+
+    // No confirmation needed: there is nothing left to throw away.
+    expect((JSON.parse(planned.content) as { title?: string }).title).toBe('Chicken Biryani');
+    expect(tables.cooking_sessions?.find((r) => r.id === ALICE_SESSION)?.current_step).toBe(0);
+  });
+
+  it('says so plainly when there is nothing to close', async () => {
+    const tables = seedTables();
+    const session = tables.cooking_sessions?.find((row) => row.id === ALICE_SESSION);
+    if (session) session.recipe_id = null;
+    const { ctx } = await contextFor(tables);
+
+    const result = await executeTool('close_recipe', '{}', ctx, signal());
+    expect((JSON.parse(result.content) as { reason?: string }).reason).toBe('nothing_in_progress');
+  });
+});

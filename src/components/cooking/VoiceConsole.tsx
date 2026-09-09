@@ -62,6 +62,7 @@ export function VoiceConsole({
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
   const [canReplay, setCanReplay] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [notHeard, setNotHeard] = useState(false);
   const [replyMs, setReplyMs] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'timers' | 'transcript'>('transcript');
@@ -146,6 +147,35 @@ export function VoiceConsole({
     await clientRef.current?.replayLast();
   }
 
+  /**
+   * Put the dish away without saying anything.
+   *
+   * The same thing `close_recipe` does when asked out loud — there has to be a
+   * button as well, because the moment you most want to stop is the moment the
+   * assistant is mid-sentence about a dish you have given up on.
+   */
+  async function closeRecipe() {
+    setClosing(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clearRecipe: true }),
+      });
+      if (!response.ok) {
+        setError('Could not close the recipe.');
+        return;
+      }
+      const body = (await response.json()) as { state?: CookingStateSnapshot };
+      if (body.state) setState(body.state);
+    } catch {
+      setError('Could not close the recipe.');
+    } finally {
+      setClosing(false);
+    }
+  }
+
   async function sendPrompt(text: string) {
     const query = text.trim();
     if (!query || !clientRef.current) return;
@@ -186,9 +216,20 @@ export function VoiceConsole({
           </h1>
         </div>
         {state.awaitingRecipe ? null : (
-          <span className="badge servings" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
-            {state.servings} {state.servings === 1 ? 'serving' : 'servings'}
-          </span>
+          <div className="row" style={{ gap: 10 }}>
+            <span className="badge servings" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
+              {state.servings} {state.servings === 1 ? 'serving' : 'servings'}
+            </span>
+            <button
+              type="button"
+              className="ghost danger small"
+              onClick={closeRecipe}
+              disabled={closing}
+              title="Put this dish away and start fresh"
+            >
+              {closing ? 'Closing…' : 'Close recipe'}
+            </button>
+          </div>
         )}
       </div>
 

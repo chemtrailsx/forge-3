@@ -133,7 +133,7 @@ export default async function DashboardPage() {
                     </div>
                     <span className="muted small">
                       Step {session.currentStep + 1}
-                      {session.notes.servings ? ` &middot; for ${session.notes.servings}` : ''} &middot;{' '}
+                      {session.notes.servings ? ` · for ${session.notes.servings}` : ''} &middot;{' '}
                       {new Date(session.updatedAt).toLocaleDateString()}
                     </span>
                   </div>

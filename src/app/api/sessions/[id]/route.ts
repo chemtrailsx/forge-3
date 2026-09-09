@@ -15,6 +15,13 @@ const patchSchema = z.object({
   currentStep: z.number().int().min(0).max(500).optional(),
   status: z.enum(['active', 'paused', 'finished']).optional(),
   servings: z.number().int().min(1).max(50).optional(),
+  /**
+   * Put the dish away and leave the session empty.
+   *
+   * The recipe stays in the cook's saved recipes; this only ends the session's
+   * hold on it, and puts them back at the start with nothing on the go.
+   */
+  clearRecipe: z.boolean().optional(),
 });
 
 /** The full cooking-state snapshot, for the UI and for state recovery. */
@@ -47,6 +54,9 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
       ...(body.currentStep === undefined ? {} : { currentStep: body.currentStep }),
       ...(body.status === undefined ? {} : { status: body.status }),
       ...(notes === undefined ? {} : { notes }),
+      // Clearing implies going back to the beginning: a step number is
+      // meaningless once there is no recipe to count through.
+      ...(body.clearRecipe ? { recipeId: null, currentStep: 0 } : {}),
     });
     if (!updated) throw new NotFoundError('Cooking session');
 

@@ -3,11 +3,33 @@
 import { useEffect, useRef } from 'react';
 import type { TranscriptEntry } from '@/lib/voice/voice-client';
 
-export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
-  const endRef = useRef<HTMLDivElement>(null);
+/** Within this much of the bottom counts as "following the conversation". */
+const FOLLOW_THRESHOLD_PX = 120;
 
+export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Keep the newest message in view by scrolling the feed itself.
+   *
+   * This used to call `scrollIntoView` on an anchor at the end of the list,
+   * which does not confine itself to the scrollable box — it walks up and
+   * scrolls every ancestor, the window included. So every single thing the
+   * cook said yanked the whole page, which is unusable when the thing you are
+   * looking at is the step above.
+   *
+   * It also stops following when the cook has scrolled up to read something.
+   * Dragging them back to the bottom mid-sentence is the same rudeness in a
+   * smaller form.
+   */
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const list = listRef.current;
+    if (!list) return;
+
+    const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    if (distanceFromBottom > FOLLOW_THRESHOLD_PX) return;
+
+    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
   }, [entries]);
 
   return (
@@ -22,7 +44,7 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
         <span className="badge">{entries.length} messages</span>
       </div>
 
-      <div className="transcript-box" style={{ flex: 1 }}>
+      <div className="transcript-box" ref={listRef} style={{ flex: 1 }}>
         {entries.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
             <div
@@ -120,7 +142,6 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
             </div>
           ))
         )}
-        <div ref={endRef} />
       </div>
     </div>
   );
