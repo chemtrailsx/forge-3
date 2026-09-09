@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cooking Companion — Architecture</title>
+<style>
+  /*
+   * One landscape A4 page, rendered to PDF by headless Chrome.
+   *
+   * Two rules govern everything here, both learned from the version this
+   * replaces:
+   *
+   *   Every arrow and rule is drawn, not typed. The previous PDF used font
+   *   glyphs for its bullets and arrows and shipped with "(cid:127)" and "fi"
+   *   where they should have been, because the glyphs were never embedded.
+   *   A drawn shape cannot fail to embed.
+   *
+   *   Nothing is positioned absolutely. The previous version overlapped two
+   *   captions into "preserve only heard textaudio + timestamps". Everything
+   *   below is a grid cell, so blocks cannot collide however the text reflows.
+   */
+
+  @page { size: A4 landscape; margin: 0; }
+
+  :root {
+    --ink: #1b1917;
+    --ink-2: #5b544c;
+    --ink-3: #857d74;
+    --bg: #faf8f5;
+    --surface: #ffffff;
+    --line: #e2ddd5;
+    --line-strong: #cbc4b9;
+    --accent: #b4283f;
+    --ok: #0f7b4f;
+    --info: #1d4ed8;
+    --warn: #9a5400;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { width: 297mm; height: 210mm; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+    font-size: 7.4pt;
+    line-height: 1.38;
+    -webkit-font-smoothing: antialiased;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .sheet {
+    width: 297mm;
+    height: 210mm;
+    padding: 11mm 12mm;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    gap: 4.6mm;
+  }
+
+  /* ------------------------------------------------------------- header */
+
+  .masthead {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 8mm;
+    padding-bottom: 3mm;
+    border-bottom: 0.6mm solid var(--ink);
+  }
+
+  .eyebrow {
+    font-size: 6.4pt;
+    font-weight: 700;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1.6mm;
+  }
+
+  h1 {
+    font-size: 21pt;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+  }
+
+  .standfirst {
+    margin-top: 1.8mm;
+    font-size: 8.4pt;
+    color: var(--ink-2);
+    max-width: 165mm;
+  }
+
+  .masthead-meta {
+    text-align: right;
+    font-size: 6.6pt;
+    color: var(--ink-3);
+    line-height: 1.75;
+  }
+
+  .masthead-meta strong { color: var(--ink); font-weight: 600; }
+
+  /* ------------------------------------------------------------ figures */
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 3mm;
+  }
+
+  .figure {
+    background: var(--surface);
+    border: 0.25mm solid var(--line);
+    border-radius: 2mm;
+    padding: 2.6mm 3mm;
+  }
+
+  .figure .n {
+    font-size: 15pt;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  .figure .k {
+    margin-top: 1.2mm;
+    font-size: 6pt;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  /* -------------------------------------------------------------- panels */
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1.32fr 1fr 1fr;
+    gap: 4.6mm;
+    min-height: 0;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 0.25mm solid var(--line);
+    border-radius: 2.4mm;
+    padding: 3.5mm 4mm;
+    display: flex;
+    flex-direction: column;
+    gap: 2.1mm;
+    min-height: 0;
+  }
+
+  .panel-title {
+    font-size: 6.6pt;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink);
+    padding-bottom: 1.8mm;
+    border-bottom: 0.25mm solid var(--line);
+  }
+
+  .rows { display: flex; flex-direction: column; gap: 1.9mm; }
+
+  .rw { display: grid; grid-template-columns: 22mm 1fr; gap: 3mm; align-items: baseline; }
+
+  .rw dt {
+    font-weight: 700;
+    font-size: 6.8pt;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .rw dd { color: var(--ink); }
+
+  .rw dd b { font-weight: 700; }
+
+  .note {
+    margin-top: auto;
+    padding-top: 2.1mm;
+    border-top: 0.25mm solid var(--line);
+    font-size: 6.6pt;
+    color: var(--ink-2);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 0.4mm 1.6mm;
+    border-radius: 1mm;
+    font-size: 6.2pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    vertical-align: 0.2mm;
+  }
+
+  .tag.ok { background: #e9f6ef; color: var(--ok); }
+  .tag.info { background: #ecf1fe; color: var(--info); }
+  .tag.warn { background: #fdf2e3; color: var(--warn); }
+  .tag.accent { background: #fdf0f1; color: var(--accent); }
+
+  /* ------------------------------------------------------------ pipeline */
+
+  .pipeline {
+    background: var(--surface);
+    border: 0.25mm solid var(--line);
+    border-radius: 2.4mm;
+    padding: 3mm 4mm 2.2mm;
+  }
+
+  .pipeline svg { display: block; width: 100%; height: auto; }
+
+  /* -------------------------------------------------------------- footer */
+
+  .colophon {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8mm;
+    align-items: baseline;
+    padding-top: 2.6mm;
+    border-top: 0.25mm solid var(--line-strong);
+    font-size: 6.4pt;
+    color: var(--ink-3);
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">Solution Architecture</div>
+      <h1>Cooking Companion</h1>
+      <p class="standfirst">
+        Open it, say what you want to make, and it writes the recipe, checks what you
+        have, and talks you through it a step at a time — interrupting, remembering and
+        timing the way a person in the kitchen with you would.
+      </p>
+    </div>
+    <div class="masthead-meta">
+      <div><strong>github.com/chemtrailsx/forge-3</strong></div>
+      <div>Next.js 16.3 · React 19.1 · TypeScript 5.9</div>
+      <div>Supabase Postgres · Groq · Rime</div>
+      <div>Deployed in <strong>bom1</strong> · beside the database</div>
+    </div>
+  </header>
+
+  <section class="figures">
+    <div class="figure"><div class="n">12</div><div class="k">Server tools</div></div>
+    <div class="figure"><div class="n">278</div><div class="k">Tests passing</div></div>
+    <div class="figure"><div class="n">87</div><div class="k">Source modules</div></div>
+    <div class="figure"><div class="n">7</div><div class="k">Runtime deps</div></div>
+    <div class="figure"><div class="n">3</div><div class="k">DB migrations</div></div>
+    <div class="figure"><div class="n">~150<span style="font-size:8pt"> ms</span></div><div class="k">Auth round trip</div></div>
+  </section>
+
+  <section class="columns">
+
+    <div class="panel">
+      <div class="panel-title">One conversational turn</div>
+      <dl class="rows">
+        <div class="rw">
+          <dt>Capture</dt>
+          <dd>The microphone is open all session. A pure-policy detector adapts its floor
+            to the room and uses hysteresis — less energy is needed to stay in speech than
+            to enter it — so a quiet syllable never ends a sentence.</dd>
+        </div>
+        <div class="rw">
+          <dt>Endpoint</dt>
+          <dd>Transcription starts at a <b>420 ms</b> pause, inside an <b>1100 ms</b>
+            hangover. Resume and the work is discarded; stop and it was the whole
+            utterance. Low latency without truncating anyone.</dd>
+        </div>
+        <div class="rw">
+          <dt>Reason</dt>
+          <dd>One cancellable SSE request carries state, tool calls and PCM together, so
+            a barge-in is a single abort reaching model, tools and synthesiser at once.</dd>
+        </div>
+        <div class="rw">
+          <dt>Speak</dt>
+          <dd>The first pass is streamed and spoken clause by clause; a tool slower than
+            <b>250 ms</b> earns a filler, so there is no dead air.</dd>
+        </div>
+      </dl>
+      <div class="note">
+        <span class="tag accent">Heard-transcript ledger</span>
+        Rime's word timestamps, matched against samples the speaker actually played, give
+        the word an interruption landed on. That — not the sentence it meant to say — is
+        what history records, so the model never answers a correction using words the cook
+        never heard.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Data &amp; isolation</div>
+      <dl class="rows">
+        <div class="rw">
+          <dt>Identity</dt>
+          <dd>Supabase Auth. Nothing downstream takes a user id as an argument; every
+            query is built from the verified session cookie.</dd>
+        </div>
+        <div class="rw">
+          <dt>Database</dt>
+          <dd>Row-level security <b>enabled and forced</b> on every user table, with
+            ownership and new-account triggers.</dd>
+        </div>
+        <div class="rw">
+          <dt>Belt &amp; braces</dt>
+          <dd>Every read also filters by <code>user_id</code>, so a policy regression is
+            caught by a query rather than by a user.</dd>
+        </div>
+        <div class="rw">
+          <dt>Tables</dt>
+          <dd>profiles · recipes · cooking_sessions · timers · user_memory ·
+            conversation_turns</dd>
+        </div>
+      </dl>
+      <div class="note">
+        <span class="tag ok">Proven, not asserted</span>
+        The suite runs against an in-memory PostgREST double that simulates RLS, so an
+        isolation failure is a wrong row in a test rather than another cook's recipe
+        on screen.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Providers &amp; resilience</div>
+      <dl class="rows">
+        <div class="rw">
+          <dt>Speech out</dt>
+          <dd>Rime <b>coda / astra</b>, PCM 24 kHz on a pooled ws3 socket.
+            <code>operation:clear</code> cancels at the source; contextIds make stale
+            audio an equality check.</dd>
+        </div>
+        <div class="rw">
+          <dt>Speech in</dt>
+          <dd>Whisper large-v3-turbo, primed with the dish and ingredients in play — the
+            words a general model most often gets wrong.</dd>
+        </div>
+        <div class="rw">
+          <dt>Reasoning</dt>
+          <dd>Groq <b>gpt-oss-20b</b>, <b>120b</b> as its rate-limit fallback, a second
+            vendor behind that. Free tiers throughout.</dd>
+        </div>
+        <div class="rw">
+          <dt>Failure</dt>
+          <dd>A limit is waited out or answered elsewhere; failover never restarts an
+            answer already being heard.</dd>
+        </div>
+      </dl>
+      <div class="note">
+        <span class="tag info">Provider-agnostic</span>
+        Each vendor sits behind one interface — <code>TtsProvider</code>,
+        <code>SttProvider</code>, <code>LlmProvider</code>. Swapping one changes a file.
+      </div>
+    </div>
+
+  </section>
+
+  <section class="pipeline">
+    <!--
+      Drawn rather than typed. Every arrowhead is a polygon and every divider a
+      line, so nothing here depends on a glyph being embedded in the PDF.
+    -->
+    <svg viewBox="0 0 1000 114" role="img" aria-label="The path of one spoken turn, and the barge-in path that cancels it.">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="#5b544c"/>
+        </marker>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="#b4283f"/>
+        </marker>
+      </defs>
+
+      <text x="0" y="10" font-size="10.5" font-weight="700" letter-spacing="1.6" fill="#1b1917">THE PATH OF ONE SPOKEN TURN</text>
+
+      <g font-size="11" fill="#1b1917">
+        <g>
+          <rect x="0" y="24" width="140" height="40" rx="6" fill="#e9f6ef" stroke="#0f7b4f" stroke-width="1"/>
+          <text x="70" y="42" text-anchor="middle" font-weight="700" fill="#0f7b4f">MIC + VAD</text>
+          <text x="70" y="56" text-anchor="middle" font-size="9.5" fill="#5b544c">always open</text>
+        </g>
+        <line x1="140" y1="44" x2="168" y2="44" stroke="#5b544c" stroke-width="1.4" marker-end="url(#a)"/>
+
+        <g>
+          <rect x="172" y="24" width="140" height="40" rx="6" fill="#ffffff" stroke="#cbc4b9" stroke-width="1"/>
+          <text x="242" y="42" text-anchor="middle" font-weight="700">WHISPER</text>
+          <text x="242" y="56" text-anchor="middle" font-size="9.5" fill="#5b544c">primed transcript</text>
+        </g>
+        <line x1="312" y1="44" x2="340" y2="44" stroke="#5b544c" stroke-width="1.4" marker-end="url(#a)"/>
+
+        <g>
+          <rect x="344" y="16" width="164" height="56" rx="6" fill="#1b1917" stroke="#1b1917" stroke-width="1"/>
+          <text x="426" y="38" text-anchor="middle" font-weight="700" fill="#ffffff">ORCHESTRATOR</text>
+          <text x="426" y="52" text-anchor="middle" font-size="9.5" fill="#cbc4b9">state · memory · history</text>
+          <text x="426" y="64" text-anchor="middle" font-size="9.5" fill="#cbc4b9">one cancellable SSE</text>
+        </g>
+        <line x1="508" y1="44" x2="536" y2="44" stroke="#5b544c" stroke-width="1.4" marker-end="url(#a)"/>
+
+        <g>
+          <rect x="540" y="24" width="150" height="40" rx="6" fill="#ffffff" stroke="#cbc4b9" stroke-width="1"/>
+          <text x="615" y="42" text-anchor="middle" font-weight="700">LLM + 12 TOOLS</text>
+          <text x="615" y="56" text-anchor="middle" font-size="9.5" fill="#5b544c">user-scoped, server-side</text>
+        </g>
+        <line x1="690" y1="44" x2="718" y2="44" stroke="#5b544c" stroke-width="1.4" marker-end="url(#a)"/>
+
+        <g>
+          <rect x="722" y="24" width="130" height="40" rx="6" fill="#ecf1fe" stroke="#1d4ed8" stroke-width="1"/>
+          <text x="787" y="42" text-anchor="middle" font-weight="700" fill="#1d4ed8">RIME TTS</text>
+          <text x="787" y="56" text-anchor="middle" font-size="9.5" fill="#5b544c">clause by clause</text>
+        </g>
+        <line x1="852" y1="44" x2="880" y2="44" stroke="#5b544c" stroke-width="1.4" marker-end="url(#a)"/>
+
+        <g>
+          <rect x="884" y="24" width="116" height="40" rx="6" fill="#ffffff" stroke="#cbc4b9" stroke-width="1"/>
+          <text x="942" y="42" text-anchor="middle" font-weight="700">PCM PLAYER</text>
+          <text x="942" y="56" text-anchor="middle" font-size="9.5" fill="#5b544c">110 ms cushion</text>
+        </g>
+      </g>
+
+      <!-- The interruption path, returning right to left. -->
+      <path d="M942 72 L942 88 L426 88" fill="none" stroke="#b4283f" stroke-width="1.4"
+            stroke-dasharray="5 3"/>
+      <path d="M426 88 L426 76" fill="none" stroke="#b4283f" stroke-width="1.4"
+            stroke-dasharray="5 3" marker-end="url(#ar)"/>
+      <text x="700" y="106" text-anchor="middle" font-size="9.5" font-weight="700" fill="#b4283f">
+        BARGE-IN — speech while it talks stops the player, aborts the stream, and keeps only what was heard
+      </text>
+
+      <text x="70" y="106" text-anchor="middle" font-size="9" fill="#5b544c">speech-start</text>
+      <text x="242" y="106" text-anchor="middle" font-size="9" fill="#5b544c">at a 420 ms pause</text>
+    </svg>
+  </section>
+
+  <footer class="colophon">
+    <div>
+      Every figure measured from the repository at the commit this describes, not
+      estimated. Latency measured against the production deployment: the same request
+      answered in 370 ms from Virginia and 151 ms once the functions were moved beside
+      the database.
+    </div>
+    <div>Single-page reference · v3</div>
+  </footer>
+
+</div>
+</body>
+</html>
