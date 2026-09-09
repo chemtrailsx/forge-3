@@ -24,8 +24,19 @@ export async function POST(request: Request): Promise<Response> {
       throw new ValidationError('Expected an "audio" file field.');
     }
 
+    /*
+     * Words from the conversation already on the caller's screen, used to bias
+     * recognition. Read as data and never trusted: it is capped, flattened to
+     * one line, and only ever reaches the transcriber as a decoding hint, so
+     * the worst a bad value can do is make recognition slightly worse for the
+     * user who sent it.
+     */
+    const rawHint = form.get('hint');
+    const hint =
+      typeof rawHint === 'string' ? rawHint.replace(/\s+/g, ' ').trim().slice(0, 600) : undefined;
+
     const provider = getSttProvider();
-    const text = await provider.transcribe(audio, request.signal);
+    const text = await provider.transcribe(audio, request.signal, hint);
 
     return Response.json({ text, model: provider.model });
   } catch (error) {

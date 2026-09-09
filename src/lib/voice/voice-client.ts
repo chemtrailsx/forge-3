@@ -134,6 +134,8 @@ export class VoiceClient {
    */
   private lastSpoken: { contextId: string; pcm: string }[] = [];
   private lastSpokenText = '';
+  /** Latest cooking state, kept for priming the transcriber. */
+  private lastState: CookingStateSnapshot | null = null;
   private lastSpokenBytes = 0;
   private replaying = false;
 
@@ -260,7 +262,10 @@ export class VoiceClient {
         speak: { text: string; contextId: string; turnIndex: number; pcm: string } | null;
         state?: CookingStateSnapshot;
       };
-      if (body.state) this.events.onState(body.state);
+      if (body.state) {
+        this.lastState = body.state;
+        this.events.onState(body.state);
+      }
       if (!body.speak) return;
 
       // The cook may have started talking while this was in flight. They win:
@@ -508,12 +513,34 @@ export class VoiceClient {
     this.eager = null;
   }
 
+  /** Words worth priming the transcriber with, newest first. */
+  private recognitionHint(): string {
+    const state = this.lastState;
+    return [
+      this.lastSpokenText,
+      state?.title ?? '',
+      (state?.ingredients ?? []).map((ingredient) => ingredient.name).join(' '),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .slice(0, 600);
+  }
+
   /** One transcription request. Returns null if it failed or was abandoned. */
   private async transcribe(audio: Blob, signal: AbortSignal): Promise<string | null> {
     try {
       const form = new FormData();
       const extension = audio.type.includes('wav') ? 'wav' : 'webm';
       form.append('audio', audio, `utterance.${extension}`);
+
+      /*
+       * What the kitchen is currently talking about, sent along to bias
+       * recognition. The assistant has usually just named the dishes, and the
+       * cook's next sentence is made of those same words — which is precisely
+       * the vocabulary a general-purpose transcriber gets wrong.
+       */
+      const hint = this.recognitionHint();
+      if (hint) form.append('hint', hint);
 
       const response = await fetch('/api/stt', { method: 'POST', body: form, signal });
       if (!response.ok) {
@@ -651,6 +678,7 @@ export class VoiceClient {
         this.currentTurnIndex = event.turnIndex;
         break;
       case 'state':
+        this.lastState = event.state;
         this.events.onState(event.state);
         break;
       case 'filler':

@@ -11,6 +11,23 @@ tools, interruption handling — is this application's job.
 
 ---
 
+## Where this runs, and why it matters
+
+`vercel.json` pins the functions to `bom1` (Mumbai). This is not a preference:
+the Supabase project is in India, and the default region for a new Vercel
+project is `iad1` in Virginia. Every database round trip was therefore crossing
+the planet and coming back — measured at roughly 300 ms each against 30 ms from
+a machine beside the database.
+
+A turn makes several of those before the model is even called, so the cook was
+waiting most of a second to be told anything, and "start cooking" spent the
+same again. The two providers that are *not* in India — the model and the voice
+— each pay a little more from Mumbai, and they are one streamed call apiece
+rather than a chain of blocking ones, so the trade is heavily in favour.
+
+**If you move the Supabase project, move this too.** The two belong in the same
+region, and the one that matters is wherever the database is.
+
 ## What it does
 
 | Voice feature | Where it lives |

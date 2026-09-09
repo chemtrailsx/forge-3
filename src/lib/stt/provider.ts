@@ -1,6 +1,7 @@
 import { sttEnv, type SttEnv } from '../env';
 import { ProviderError, ValidationError } from '../errors';
 import { isLikelyHallucination } from './hallucinations';
+import { RECOGNITION_FRAMING, buildRecognitionPrompt } from './vocabulary';
 
 /**
  * Speech to text, against an OpenAI-compatible `/audio/transcriptions`
@@ -12,15 +13,12 @@ import { isLikelyHallucination } from './hallucinations';
 
 export interface SttProvider {
   readonly model: string;
-  transcribe(audio: Blob, signal: AbortSignal): Promise<string>;
+  /**
+   * @param hint words from the live conversation to bias recognition towards.
+   *        Empty is valid and gives the standing vocabulary alone.
+   */
+  transcribe(audio: Blob, signal: AbortSignal, hint?: string): Promise<string>;
 }
-
-/**
- * Recognition hint. Kept short: every word in it is a word the model may hand
- * back verbatim when there is nothing to transcribe.
- */
-const DOMAIN_PROMPT =
-  'Cooking conversation. Ingredients, quantities, grams, millilitres, teaspoons, tablespoons, timers, oven temperatures.';
 
 /** 25 MB is the common provider ceiling; an utterance is orders below it. */
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
@@ -32,19 +30,32 @@ export class OpenAiCompatibleStt implements SttProvider {
     return this.config.model;
   }
 
-  async transcribe(audio: Blob, signal: AbortSignal): Promise<string> {
+  async transcribe(audio: Blob, signal: AbortSignal, hint?: string): Promise<string> {
     if (audio.size === 0) throw new ValidationError('Empty audio upload.');
     if (audio.size > MAX_AUDIO_BYTES) throw new ValidationError('Audio clip is too large.');
+
+    const prompt = buildRecognitionPrompt({ spoken: hint });
 
     const form = new FormData();
     form.append('file', audio, fileNameFor(audio.type));
     form.append('model', this.config.model);
     form.append('response_format', 'json');
-    // A domain hint improves recognition of ingredient names and fractional
-    // quantities, which is most of what gets said here. It is also what the
-    // model reads back when handed silence, so the same text is passed to the
-    // filter below to be recognised on the way out.
-    form.append('prompt', DOMAIN_PROMPT);
+    // Biases decoding towards the words this kitchen is actually using. See
+    // `vocabulary.ts` for why the live conversation goes in ahead of the
+    // standing list.
+    form.append('prompt', prompt);
+    /*
+     * Pinned rather than detected. Left to guess, the model can decide a few
+     * seconds of accented English with Hindi dish names in it are another
+     * language altogether, and transliterate the lot.
+     */
+    form.append('language', 'en');
+    /*
+     * No sampling. Temperature is what turns an unfamiliar word into a
+     * confident, plausible, wrong one — "tandoori" into "durin" — and there is
+     * no upside to invention in a transcript.
+     */
+    form.append('temperature', '0');
 
     const response = await fetch(this.config.endpoint, {
       method: 'POST',
@@ -66,9 +77,16 @@ export class OpenAiCompatibleStt implements SttProvider {
     const payload = (await response.json()) as { text?: string };
     const text = (payload.text ?? '').trim();
 
-    // Whisper answers silence with speech. Returning an empty string here
-    // means the caller treats it as "nothing was said", which is the truth.
-    if (isLikelyHallucination(text, DOMAIN_PROMPT)) {
+    /*
+     * Whisper answers silence with speech. Returning an empty string here
+     * means the caller treats it as "nothing was said", which is the truth.
+     *
+     * Only the framing sentence is offered as the echo to look for, never the
+     * vocabulary: a short transcript made entirely of vocabulary words is not
+     * an artefact, it is a cook saying "lamb korma and tandoori naan", and
+     * discarding that would defeat the point of having primed for it.
+     */
+    if (isLikelyHallucination(text, RECOGNITION_FRAMING)) {
       console.warn(`[stt] discarded a likely silence artefact: ${JSON.stringify(text)}`);
       return '';
     }

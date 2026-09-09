@@ -54,8 +54,13 @@ export async function POST(request: Request): Promise<Response> {
 
     // Learned silently on first use rather than asked for. Only filled if
     // absent, so anything the cook has actually told us wins.
+    //
+    // Started, not awaited: nothing in the response depends on it, and this is
+    // the button someone presses when they want to start cooking now.
     if (body.region && !profile?.preferences.region) {
-      await updatePreferences(db, { region: body.region.toUpperCase() });
+      void updatePreferences(db, { region: body.region.toUpperCase() }).catch((error: unknown) => {
+        console.error('[api/sessions] could not record region', error);
+      });
     }
 
     if (!body.recipeId) {
