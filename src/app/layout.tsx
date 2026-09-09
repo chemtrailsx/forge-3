@@ -7,10 +7,24 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#7c3aed',
+  // Matches the page background in each theme, so the browser chrome on a
+  // phone does not sit in a colour the app never uses.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#faf8f5' },
+    { media: '(prefers-color-scheme: dark)', color: '#161513' },
+  ],
   width: 'device-width',
   initialScale: 1,
 };
+
+/*
+ * Applies the saved theme before the first paint.
+ *
+ * Without this the page renders in the default theme and then corrects itself,
+ * and a white flash in a dark kitchen is worse than no dark mode at all. It
+ * has to be inline and synchronous — anything deferred is already too late.
+ */
+const THEME_SCRIPT = `try{var t=localStorage.getItem('cooking-companion-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t)}}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -28,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body>{children}</body>
     </html>

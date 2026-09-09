@@ -34,6 +34,15 @@ export type FakeSupabase = {
   calls: RecordedQuery[];
   /** Queries against a table, for assertions. */
   queriesFor(table: string): RecordedQuery[];
+  /**
+   * The most queries that were ever in flight at once.
+   *
+   * How you tell a batch from a chain without a stopwatch: code that awaits
+   * its reads one after another never gets above one, however fast the machine
+   * is. Asserting on this instead of elapsed time is the difference between a
+   * test that means something and a test that fails when the suite is busy.
+   */
+  maxConcurrent: number;
 };
 
 const RLS_ERROR = { message: 'new row violates row-level security policy', code: '42501' };
@@ -84,6 +93,8 @@ export function createFakeSupabase(options: {
   const calls: RecordedQuery[] = [];
   const rlsUserId = options.rlsUserId;
   const latencyMs = options.latencyMs ?? 0;
+  let inFlight = 0;
+  let maxConcurrent = 0;
 
   let idCounter = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++idCounter).padStart(12, '0')}`;
@@ -261,12 +272,18 @@ export function createFakeSupabase(options: {
       onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
     ): PromiseLike<TResult1 | TResult2> {
       const settle = () => this.run();
+      inFlight += 1;
+      maxConcurrent = Math.max(maxConcurrent, inFlight);
+      const done = <T,>(value: T): T => {
+        inFlight -= 1;
+        return value;
+      };
       const promise = latencyMs > 0
         ? new Promise<{ data: unknown; error: unknown }>((resolve) => {
             setTimeout(() => resolve(settle()), latencyMs);
           })
         : Promise.resolve(settle());
-      return promise.then(onfulfilled, onrejected);
+      return promise.then(done).then(onfulfilled, onrejected);
     }
   }
 
@@ -287,6 +304,9 @@ export function createFakeSupabase(options: {
     client: client as unknown as SupabaseClient,
     tables,
     calls,
+    get maxConcurrent() {
+      return maxConcurrent;
+    },
     queriesFor: (table: string) => calls.filter((call) => call.table === table),
   };
 }

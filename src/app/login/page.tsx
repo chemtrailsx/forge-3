@@ -32,20 +32,20 @@ export default function LoginPage() {
             width: 48,
             height: 48,
             borderRadius: '50%',
-            background: 'var(--accent-gradient)',
+            background: 'var(--accent-quiet)',
+            color: 'var(--accent)',
+            border: '1px solid var(--border)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 14px rgba(212, 91, 122, 0.3)',
             marginBottom: 16,
-            color: '#ffffff',
           }}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2L14.4 8.6L21 11L14.4 13.4L12 20L9.6 13.4L3 11L9.6 8.6L12 2Z" />
           </svg>
         </div>
-        <h1 style={{ fontSize: '1.85rem', marginBottom: 8, letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>
+        <h1 style={{ fontSize: '1.85rem', marginBottom: 8, letterSpacing: '-0.03em', color: 'var(--text)' }}>
           Cooking Companion
         </h1>
         <p className="muted" style={{ maxWidth: 360, margin: '0 auto', fontSize: '0.9rem', lineHeight: 1.5 }}>
@@ -59,7 +59,7 @@ export default function LoginPage() {
           background: '#FFFFFF',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-md)',
-          borderRadius: 'var(--radius-xl)',
+          borderRadius: 'var(--radius-lg)',
           padding: '32px 28px',
         }}
       >

@@ -1,68 +1,151 @@
-/* ==========================================================================
-   Cooking Companion — Pastel Creamy Luxury & Pink Glassmorphism
-   ========================================================================== */
+/*
+ * Cooking Companion — visual design.
+ *
+ * This is a tool used at arm's length, with wet hands, in a room that is
+ * either glaring with afternoon light or lit by one bulb over a hob. Every
+ * decision below follows from that rather than from taste:
+ *
+ *   Surfaces are opaque. Frosted, translucent panels take their contrast from
+ *   whatever happens to sit behind them, which means the text on them is
+ *   legible on a designer's screen and a gamble in a kitchen.
+ *
+ *   Colour means something. Green is "I can hear you", blue is "I am
+ *   speaking", amber is "something is cooking", red is "this throws something
+ *   away". Four hues, four meanings, none decorative — a glance from the sink
+ *   should answer a question rather than admire a gradient.
+ *
+ *   The step is the biggest thing on screen. It is the one piece of text
+ *   anybody actually reads while cooking.
+ *
+ *   Nothing moves unless it is saying something. The listening ring pulses,
+ *   because a cook needs to know the microphone is open. Nothing else does.
+ */
+
+/* ---------------------------------------------------------------- tokens */
 
 :root {
   --font-heading: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 
-  /* Color Palette — Warm Rose Almond Cream & Frosted Glass */
-  --bg-primary: #FAF5EE;
-  --bg-secondary: #F3ECE2;
-  --bg-tertiary: #EAE1D4;
-  
-  --surface: rgba(255, 255, 255, 0.88);
-  --surface-subtle: rgba(255, 245, 247, 0.7);
-  --surface-hover: rgba(255, 235, 239, 0.85);
-  --surface-card: rgba(255, 255, 255, 0.84);
-  
-  --border: rgba(230, 218, 206, 0.85);
-  --border-light: rgba(242, 232, 222, 0.7);
-  --border-focus: #F43F5E;
+  /* Warm neutrals: a kitchen is not a cold place. */
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --surface-2: #f2efea;
+  --surface-3: #e8e3dc;
 
-  /* Text & Ink */
-  --text-primary: #1F1B18;
-  --text-secondary: #5A524A;
-  --text-muted: #8E8478;
-  --text-tertiary: #B2A799;
+  --border: #e2ddd5;
+  --border-strong: #cbc4b9;
 
-  /* Vibrant & Pastel Pink Gradients */
-  --accent-primary: #E11D48;
-  --accent-secondary: #BE123C;
-  --accent-pink-bright: #F43F5E;
-  --accent-pastel-pink: #FFE4E6;
-  --accent-pastel-peach: #FFEDD5;
-  --accent-pastel-lavender: #F3E8FF;
+  --text: #1b1917;
+  --text-2: #5b544c;
+  --text-3: #736b62;
 
-  --accent-gradient: linear-gradient(135deg, #FB7185 0%, #E11D48 55%, #BE123C 100%);
-  --accent-gradient-hover: linear-gradient(135deg, #FDA4AF 0%, #F43F5E 55%, #E11D48 100%);
-  
-  /* 3D Orb Gradients */
-  --orb-gradient: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #FCE7F3 30%, #F472B6 60%, #C084FC 85%, #818CF8 100%);
-  --orb-listening: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #ECFDF5 30%, #6EE7B7 65%, #10B981 100%);
-  --orb-thinking: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #FEF3C7 35%, #FBBF24 75%, #F59E0B 100%);
-  --orb-speaking: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #FDF2F8 30%, #F472B6 65%, #E11D48 100%);
+  /* Brand. Identity and emphasis, never a background wash. */
+  --accent: #b4283f;
+  --accent-hover: #97202f;
+  --accent-quiet: #fdf0f1;
 
-  /* State Colors */
-  --listening-color: #059669;
-  --listening-bg: #ECFDF5;
-  --speaking-color: #E11D48;
-  --speaking-bg: #FFF1F2;
-  --danger-color: #E11D48;
-  --danger-bg: #FFE4E6;
+  /* State. Each hue has exactly one job. */
+  --ok: #0f7b4f;
+  --ok-quiet: #e9f6ef;
+  --info: #1d4ed8;
+  --info-quiet: #ecf1fe;
+  --warn: #9a5400;
+  --warn-quiet: #fdf2e3;
+  --danger: #b42318;
+  --danger-quiet: #fdeeec;
 
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-xl: 32px;
-  --radius-full: 9999px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
 
-  --shadow-sm: 0 2px 8px rgba(190, 24, 93, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 10px 30px -4px rgba(190, 24, 93, 0.08), 0 3px 10px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 20px 48px -8px rgba(190, 24, 93, 0.12), 0 6px 18px rgba(0, 0, 0, 0.04);
-  --shadow-orb: 0 20px 50px -10px rgba(225, 29, 72, 0.35), 0 8px 24px rgba(192, 132, 252, 0.2);
+  /* Two levels, neutral. Depth is for things that float, not for texture. */
+  --shadow-sm: 0 1px 2px rgba(27, 25, 23, 0.06);
+  --shadow-md: 0 6px 20px rgba(27, 25, 23, 0.1);
+
+  --tap: 44px; /* the smallest thing a wet fingertip can be asked to hit */
+
+  color-scheme: light;
 }
+
+/*
+ * Dark theme.
+ *
+ * Not black. Pure black behind near-white text haloes badly on an LCD in a dim
+ * room, which is exactly where an evening's cooking happens — so warm charcoal
+ * instead, with the text pulled back from pure white for the same reason.
+ *
+ * Declared twice on purpose: once for the system preference, once for an
+ * explicit choice, so the toggle can override the system in both directions.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #161513;
+    --surface: #201e1b;
+    --surface-2: #2a2724;
+    --surface-3: #35312d;
+
+    --border: #332f2b;
+    --border-strong: #4a443e;
+
+    --text: #f4f1ed;
+    --text-2: #b3aca2;
+    --text-3: #968d83;
+
+    --accent: #ff8a9b;
+    --accent-hover: #ffa5b2;
+    --accent-quiet: #331e22;
+
+    --ok: #58d69a;
+    --ok-quiet: #142c22;
+    --info: #9fbcff;
+    --info-quiet: #1a2340;
+    --warn: #f0b866;
+    --warn-quiet: #33260f;
+    --danger: #ff9a8f;
+    --danger-quiet: #3a1f1c;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #161513;
+  --surface: #201e1b;
+  --surface-2: #2a2724;
+  --surface-3: #35312d;
+
+  --border: #332f2b;
+  --border-strong: #4a443e;
+
+  --text: #f4f1ed;
+  --text-2: #b3aca2;
+  --text-3: #968d83;
+
+  --accent: #ff8a9b;
+  --accent-hover: #ffa5b2;
+  --accent-quiet: #331e22;
+
+  --ok: #58d69a;
+  --ok-quiet: #142c22;
+  --info: #9fbcff;
+  --info-quiet: #1a2340;
+  --warn: #f0b866;
+  --warn-quiet: #33260f;
+  --danger: #ff9a8f;
+  --danger-quiet: #3a1f1c;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------------ base */
 
 * {
   box-sizing: border-box;
@@ -72,210 +155,89 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--bg-primary);
-  background-image: 
-    radial-gradient(circle at 12% 12%, rgba(254, 205, 211, 0.55) 0%, transparent 45%),
-    radial-gradient(circle at 88% 18%, rgba(245, 208, 254, 0.5) 0%, transparent 45%),
-    radial-gradient(circle at 50% 85%, rgba(254, 215, 170, 0.45) 0%, transparent 55%),
-    radial-gradient(circle at 75% 70%, rgba(254, 226, 226, 0.5) 0%, transparent 50%);
-  background-attachment: fixed;
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  min-height: 100vh;
 }
 
-a {
-  color: var(--accent-primary);
-  text-decoration: none;
-  transition: color 0.15s ease;
-}
-a:hover {
-  color: #9f1239;
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
 h2,
-h3,
-h4 {
+h3 {
   font-family: var(--font-heading);
-  margin: 0 0 0.4em;
-  color: var(--text-primary);
+  color: var(--text);
   letter-spacing: -0.02em;
-}
-
-h1 {
-  font-size: 2rem;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-h2 {
-  font-size: 1.4rem;
-  font-weight: 700;
   line-height: 1.25;
 }
 
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin: 0 0 8px;
+}
+
 h3 {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 1rem;
+  margin: 0 0 8px;
 }
 
 p {
-  margin: 0 0 0.8em;
+  margin: 0 0 12px;
 }
 
-/* ==========================================================================
-   Full-Screen Studio Layout
-   ========================================================================== */
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/*
+ * A visible focus ring on everything, always. Knowing where you are is the
+ * only navigation a keyboard user has.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Motion here is information. If the reader does not want it, drop it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------- layout */
 
 .page {
-  max-width: 1380px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 20px 28px 48px;
-  min-height: 100vh;
+  padding: 24px 20px 48px;
+}
+
+.page.narrow {
+  max-width: 460px;
+  padding-top: 56px;
 }
 
 .page.fullscreen {
-  max-width: 100%;
-  padding: 16px 24px;
-}
-
-.narrow {
-  max-width: 460px;
-}
-
-/* Top Navigation Bar */
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 12px 24px;
-  margin-bottom: 20px;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-sm);
-}
-
-.topbar .brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--text-primary);
-  font-family: var(--font-heading);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.topbar .brand-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--accent-gradient);
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.35);
-}
-
-.topbar .brand-subtitle {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.topbar nav {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.user-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  background: rgba(255, 241, 242, 0.8);
-  border: 1px solid rgba(244, 63, 94, 0.2);
-  border-radius: var(--radius-full);
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--accent-primary);
-}
-
-.user-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--listening-color);
-}
-
-/* ==========================================================================
-   Expansive Canvas & Glass Cards
-   ========================================================================== */
-
-.card {
-  background: var(--surface-card);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  border-radius: var(--radius-xl);
-  padding: 26px;
-  box-shadow: var(--shadow-md);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.card:hover {
-  box-shadow: var(--shadow-lg);
-  border-color: rgba(255, 228, 233, 0.9);
-}
-
-.card-header {
-  margin-bottom: 14px;
-}
-
-.section-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-}
-
-.grid {
-  display: grid;
-  gap: 22px;
-}
-
-.grid.two {
-  grid-template-columns: 1fr 1fr;
-}
-
-/* Full-Screen Cooking Studio Grid */
-.studio-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.95fr);
-  gap: 24px;
-  align-items: stretch;
-  min-height: calc(100vh - 120px);
-}
-
-@media (max-width: 1080px) {
-  .studio-layout {
-    grid-template-columns: 1fr;
-  }
+  max-width: 1320px;
 }
 
 .stack {
@@ -286,556 +248,108 @@ p {
 
 .row {
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .spread {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-/* ==========================================================================
-   Buttons with Pink Glass & Ripple
-   ========================================================================== */
-
-button,
-.button {
-  font-family: var(--font-heading);
-  font-size: 0.88rem;
-  font-weight: 600;
-  border-radius: var(--radius-full);
-  border: 1.5px solid rgba(244, 63, 94, 0.22);
-  background: rgba(255, 241, 242, 0.85);
-  color: #BE123C;
-  padding: 9px 20px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.06);
+.grid {
+  display: grid;
+  gap: 20px;
 }
 
-button:hover:not(:disabled),
-.button:hover {
-  background: linear-gradient(135deg, #FFE4E6 0%, #FECDD3 100%);
-  border-color: #F43F5E;
-  color: #9F1239;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.22);
+.grid.two {
+  grid-template-columns: 1fr 1fr;
 }
 
-button:active:not(:disabled) {
-  transform: scale(0.97);
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
 }
 
-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none;
-}
-
-button.primary,
-.button.primary {
-  background: var(--accent-gradient);
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: 0 4px 18px rgba(225, 29, 72, 0.35);
-}
-
-button.primary:hover:not(:disabled) {
-  background: var(--accent-gradient-hover);
-  color: #ffffff;
-  box-shadow: 0 8px 24px rgba(225, 29, 72, 0.45);
-}
-
-button.ghost {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  color: var(--text-secondary);
-}
-button.ghost:hover {
-  background: rgba(255, 241, 242, 0.6);
-  color: var(--accent-primary);
-  border-color: rgba(244, 63, 94, 0.2);
-}
-
-/*
- * Destructive actions. "Forget" throws away something the assistant learned
- * and there is no undo, so it should not look identical to every other button
- * — but it is also not the main action on the page, so it stays quiet until
- * the pointer is on it.
- */
-button.danger {
-  color: var(--danger-color);
-}
-
-button.danger:hover:not(:disabled) {
-  background: var(--danger-bg);
-  border-color: rgba(225, 29, 72, 0.3);
-  color: var(--danger-color);
-}
-
-.pill-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 16px;
-  border-radius: var(--radius-full);
-  background: rgba(255, 241, 242, 0.85);
-  border: 1px solid rgba(244, 63, 94, 0.2);
-  font-size: 0.84rem;
-  font-weight: 500;
-  color: #9F1239;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.pill-tag:hover {
-  background: #FFE4E6;
-  border-color: #F43F5E;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.15);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  text-align: left;
-}
-
-.field label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-/* Form inputs */
-input,
-select,
-textarea {
-  font-family: var(--font-body);
-  font-size: 0.94rem;
-  width: 100%;
-  padding: 12px 18px;
-  border-radius: var(--radius-md);
-  border: 1.5px solid var(--border);
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--text-primary);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3.5px rgba(244, 63, 94, 0.15);
-}
-
-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-/* ==========================================================================
-   Iridescent 3D Sphere & Pink Concentric Ripple Effect
-   ========================================================================== */
-
-.orb-container {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 20px 20px;
-  overflow: visible;
-}
-
-/* Pink Concentric Ripple Waves */
-.ripple-wrapper {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -58%);
-  width: 290px;
-  height: 290px;
-  pointer-events: none;
+.session-heading {
   display: flex;
   align-items: center;
-  justify-content: center;
-  z-index: 1;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-.ripple-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid rgba(244, 63, 94, 0.45);
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  animation: ripple-wave 3.2s cubic-bezier(0.2, 0.8, 0.3, 1) infinite;
-}
-
-.ripple-ring:nth-child(2) {
-  animation-delay: 1.05s;
-}
-
-.ripple-ring:nth-child(3) {
-  animation-delay: 2.1s;
-}
-
-@keyframes ripple-wave {
-  0% {
-    transform: scale(0.46);
-    opacity: 0.95;
-    border-color: rgba(244, 63, 94, 0.55);
-  }
-  50% {
-    opacity: 0.45;
-  }
-  100% {
-    transform: scale(1.48);
-    opacity: 0;
-    border-color: rgba(244, 63, 94, 0.05);
+@media (max-width: 960px) {
+  .grid.two,
+  .studio-layout {
+    grid-template-columns: 1fr;
   }
 }
 
-/* 3D Pearl Orb */
-.pearl-orb {
-  width: 136px;
-  height: 136px;
-  border-radius: 50%;
-  position: relative;
-  z-index: 3;
-  cursor: pointer;
-  background: var(--orb-gradient);
-  box-shadow: 
-    inset 0 -8px 20px rgba(190, 24, 93, 0.35),
-    inset 0 10px 20px rgba(255, 255, 255, 0.95),
-    var(--shadow-orb);
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+/* -------------------------------------------------------------- surfaces */
 
-.pearl-orb:hover {
-  transform: scale(1.06);
-  box-shadow: 
-    inset 0 -8px 20px rgba(190, 24, 93, 0.35),
-    inset 0 10px 20px rgba(255, 255, 255, 0.95),
-    0 24px 55px -10px rgba(225, 29, 72, 0.45);
-}
-
-.pearl-orb:active {
-  transform: scale(0.96);
-}
-
-/* Highlight reflection on sphere */
-.pearl-orb::before {
-  content: '';
-  position: absolute;
-  top: 14%;
-  left: 24%;
-  width: 38px;
-  height: 22px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.2) 100%);
-  transform: rotate(-35deg);
-  pointer-events: none;
-}
-
-/* Floor shadow / mirror puddle */
-.orb-reflection {
-  width: 104px;
-  height: 18px;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(225, 29, 72, 0.22) 0%, transparent 70%);
-  margin-top: 14px;
-  z-index: 2;
-}
-
-/* State changes for Orb */
-.pearl-orb[data-status='listening'] {
-  background: var(--orb-listening);
-  box-shadow: 
-    inset 0 -8px 20px rgba(16, 185, 129, 0.3),
-    inset 0 10px 20px rgba(255, 255, 255, 0.95),
-    0 20px 45px -10px rgba(16, 185, 129, 0.4);
-}
-
-.pearl-orb[data-status='speaking'] {
-  background: var(--orb-speaking);
-  box-shadow: 
-    inset 0 -8px 20px rgba(225, 29, 72, 0.35),
-    inset 0 10px 20px rgba(255, 255, 255, 0.95),
-    0 22px 50px -10px rgba(225, 29, 72, 0.45);
-  animation: orb-breathe 2.4s ease-in-out infinite alternate;
-}
-
-@keyframes orb-breathe {
-  from { transform: scale(1); }
-  to { transform: scale(1.05); }
-}
-
-.pearl-orb[data-status='thinking'],
-.pearl-orb[data-status='transcribing'] {
-  background: var(--orb-thinking);
-  box-shadow: 
-    inset 0 -8px 20px rgba(245, 158, 11, 0.3),
-    inset 0 10px 20px rgba(255, 255, 255, 0.95),
-    0 20px 45px -10px rgba(245, 158, 11, 0.38);
-}
-
-/* Orb mic icon inside */
-.orb-icon {
-  width: 38px;
-  height: 38px;
-  color: #3A3238;
-  z-index: 4;
-  transition: transform 0.2s ease;
-}
-
-/* ==========================================================================
-   Live Spoken Subtitles Card & Floating Dock
-   ========================================================================== */
-
-.live-caption-card {
-  width: 100%;
-  max-width: 620px;
-  margin: 14px auto 0;
-  padding: 14px 20px;
-  border-radius: var(--radius-lg);
-  background: rgba(255, 241, 242, 0.7);
-  border: 1px solid rgba(244, 63, 94, 0.25);
-  box-shadow: var(--shadow-sm);
-  text-align: left;
-  animation: slide-up 0.2s ease-out;
-}
-
-.dock-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1.5px solid rgba(244, 63, 94, 0.25);
-  border-radius: var(--radius-full);
-  padding: 8px 12px 8px 20px;
-  box-shadow: var(--shadow-md);
-  width: 100%;
-  max-width: 620px;
-  margin: 16px auto 0;
-  transition: all 0.2s ease;
-}
-
-.dock-bar:focus-within {
-  border-color: #F43F5E;
-  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(244, 63, 94, 0.15);
-}
-
-.dock-input {
-  border: none;
-  background: transparent;
-  font-family: var(--font-body);
-  font-size: 0.92rem;
-  color: var(--text-primary);
-  flex: 1;
-  outline: none;
-  padding: 4px 0;
-  box-shadow: none;
-}
-
-.dock-input:focus {
-  box-shadow: none;
-}
-
-.dock-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-/* ==========================================================================
-   Recipe Step Display (Expansive Typography)
-   ========================================================================== */
-
-.step-container {
+.card {
   background: var(--surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  border-radius: var(--radius-xl);
-  padding: 32px 36px;
-  box-shadow: var(--shadow-md);
-}
-
-.step-progress-track {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--bg-secondary);
-  margin: 18px 0 24px;
-  overflow: hidden;
-}
-
-.step-progress-indicator {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--accent-gradient);
-  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.step-instruction {
-  font-family: var(--font-heading);
-  font-size: 1.65rem;
-  font-weight: 700;
-  line-height: 1.35;
-  color: var(--text-primary);
-  margin-bottom: 16px;
-  letter-spacing: -0.02em;
-}
-
-.next-step-badge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 12px 18px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 241, 242, 0.6);
-  border: 1px solid rgba(244, 63, 94, 0.2);
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  width: 100%;
-}
-
-.next-step-badge strong {
-  color: var(--accent-primary);
-  font-size: 0.76rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-/* ==========================================================================
-   Tabs & Sidebar Panel
-   ========================================================================== */
-
-.tabs-header {
-  display: flex;
-  gap: 8px;
-  padding: 4px;
-  background: rgba(255, 241, 242, 0.6);
-  border-radius: var(--radius-full);
-  margin-bottom: 18px;
-  border: 1px solid rgba(244, 63, 94, 0.15);
-}
-
-.tab-button {
-  flex: 1;
-  padding: 8px 14px;
-  border-radius: var(--radius-full);
-  border: none;
-  background: transparent;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  box-shadow: none;
-  transition: all 0.15s ease;
-}
-
-.tab-button.active {
-  background: #FFFFFF;
-  color: var(--accent-primary);
-  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.12);
-}
-
-/* Transcript in pastel style */
-.transcript-box {
-  max-height: 480px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 4px;
-}
-
-.transcript-box::-webkit-scrollbar {
-  width: 4px;
-}
-.transcript-box::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
-}
-
-.bubble {
-  padding: 14px 18px;
-  border-radius: var(--radius-md);
-  font-size: 0.92rem;
-  line-height: 1.5;
-  box-shadow: var(--shadow-sm);
-  animation: slide-up 0.2s ease-out;
-}
-
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.bubble.user {
-  background: rgba(255, 255, 255, 0.95);
   border: 1px solid var(--border);
-  border-left: 3.5px solid var(--accent-primary);
+  border-radius: var(--radius-lg);
+  padding: 20px;
 }
 
-.bubble.assistant {
-  background: rgba(255, 241, 242, 0.9);
-  border: 1px solid rgba(244, 63, 94, 0.25);
-  border-left: 3.5px solid var(--accent-secondary);
+.notice {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.88rem;
 }
 
-.bubble .who {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.72rem;
+.notice.error {
+  border-color: var(--danger);
+  background: var(--danger-quiet);
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------------ text */
+
+.muted {
+  color: var(--text-2);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.section-label {
+  font-size: 0.7rem;
   font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  margin-bottom: 6px;
+  color: var(--text-3);
+  margin-bottom: 4px;
 }
 
-/* Ingredients & Timers in pastel style */
+/* ----------------------------------------------------------------- lists */
+
 ul.plain {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 /*
- * A row: label on the left, value on the right.
- *
- * Every list in the app is written expecting this — two children per row, and
- * the ones that want something else override `flex-direction` inline, which
- * only means anything if the row is a flex container to begin with. Without
- * this rule the two children simply run together, which is how the profile
- * came to read "Usual servings4" and "Speechrime", and why every "Forget"
- * button sat underneath its memory instead of beside it.
+ * A row: label on the left, value on the right. Every list in the app is
+ * written expecting this, and the ones that want something else override
+ * `flex-direction` inline — which only means anything if the row is a flex
+ * container to begin with.
  */
 ul.plain > li {
   display: flex;
@@ -844,128 +358,602 @@ ul.plain > li {
   gap: 16px;
 }
 
-/* Values are right-aligned, and wrap inside their own column when long. */
 ul.plain > li > :last-child:not(:only-child) {
   text-align: right;
   min-width: 0;
 }
+
+/* --------------------------------------------------------------- buttons */
+
+button,
+.button {
+  font: inherit;
+  font-weight: 600;
+  min-height: var(--tap);
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+button:hover:not(:disabled),
+.button:hover {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/*
+ * The primary action is ink, not colour. It is unmistakably the main thing on
+ * the page at any contrast in either theme, and it leaves the palette free to
+ * carry meaning instead of emphasis.
+ */
+button.primary,
+.button {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+button.primary:hover:not(:disabled),
+.button:hover {
+  background: var(--text-2);
+  border-color: var(--text-2);
+  color: var(--bg);
+}
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-2);
+}
+
+button.ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/*
+ * Destructive actions. "Forget" and "Close recipe" throw something away with
+ * no undo, so they read as destructive on hover — and stay quiet until then,
+ * because neither is the main thing on its page.
+ */
+button.danger {
+  color: var(--danger);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--danger-quiet);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.small,
+.button.small {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------- inputs */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+}
+
+input::placeholder {
+  color: var(--text-3);
+}
+
+input:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- badges */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* "on" is a live state, so it takes a state colour rather than the brand. */
+.badge.on {
+  border-color: var(--ok);
+  background: var(--ok-quiet);
+  color: var(--ok);
+}
+
+.badge.servings {
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--text-2);
+}
+
+.pill-tag,
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.user-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+
+/* --------------------------------------------------------------- top bar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-quiet);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.brand-subtitle {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-3);
+  font-family: var(--font-body);
+  letter-spacing: 0;
+}
+
+/* ----------------------------------------------------------------- steps */
+
+.step-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+/*
+ * The one thing a cook actually reads. Sized to be legible at arm's length
+ * from a worktop, which is further away than a screen is usually designed for.
+ */
+.step-instruction {
+  font-family: var(--font-heading);
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin: 16px 0 0;
+}
+
+.step-progress-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  overflow: hidden;
+  margin-top: 14px;
+}
+
+.step-progress-indicator {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.next-step-badge {
+  display: block;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.92rem;
+}
+
+.live-caption-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 12px 14px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+}
+
+/* ------------------------------------------------------------------- orb */
+
+.orb-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0 12px;
+}
+
+/*
+ * The microphone control.
+ *
+ * A plain circle. It was a five-stop radial gradient with a floor reflection,
+ * which looked like an AI product and told the cook nothing. What they need to
+ * know from across a room is whether it is listening — now carried by one ring
+ * of colour and whether it is moving.
+ */
+.pearl-orb {
+  position: relative;
+  z-index: 1;
+  width: 132px;
+  height: 132px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.pearl-orb:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.pearl-orb[data-status='listening'] {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: var(--ok-quiet);
+}
+
+.pearl-orb[data-status='speaking'] {
+  border-color: var(--info);
+  color: var(--info);
+  background: var(--info-quiet);
+}
+
+.pearl-orb[data-status='thinking'],
+.pearl-orb[data-status='transcribing'] {
+  border-color: var(--warn);
+  color: var(--warn);
+  background: var(--warn-quiet);
+}
+
+.orb-icon {
+  width: 44px;
+  height: 44px;
+}
+
+/* Kept as a hook so the markup need not change; draws nothing. */
+.orb-reflection {
+  display: none;
+}
+
+.ripple-wrapper {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/*
+ * One expanding ring per wave, and only while the microphone is open. This is
+ * the only motion in the app: it is the difference between "listening" and
+ * "frozen", which a cook with both hands full cannot check any other way.
+ */
+.ripple-ring {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: 2px solid var(--ok);
+  opacity: 0;
+}
+
+.orb-container:has(.pearl-orb[data-status='listening']) .ripple-ring {
+  animation: ripple 2.4s ease-out infinite;
+}
+
+.orb-container:has(.pearl-orb[data-status='listening']) .ripple-ring:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.orb-container:has(.pearl-orb[data-status='listening']) .ripple-ring:nth-child(3) {
+  animation-delay: 1.6s;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ dock */
+
+.dock-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.dock-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+}
+
+.dock-input:focus {
+  outline: none;
+}
+
+.dock-bar:focus-within {
+  border-color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ tabs */
+
+.tabs-header {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.tab-button {
+  flex: 1;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+
+.tab-button:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.tab-button.active {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* ------------------------------------------------------------ transcript */
+
+.transcript-box {
+  max-height: 460px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+
+.transcript-box::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transcript-box::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+}
+
+.bubble {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* Who is speaking is carried by the edge, not by a coloured panel. */
+.bubble.user {
+  border-left: 3px solid var(--border-strong);
+}
+
+.bubble.assistant {
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ----------------------------------------------------------- ingredients */
 
 .ingredient-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--border-light);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
   font-size: 0.92rem;
-  color: var(--text-primary);
-  transition: all 0.15s ease;
-}
-
-.ingredient-item:hover {
-  border-color: rgba(244, 63, 94, 0.3);
-  background: #FFF1F2;
 }
 
 .ingredient-bullet {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent-primary);
-  flex-shrink: 0;
+  background: var(--text-3);
+  flex: none;
 }
+
+/* ---------------------------------------------------------------- timers */
 
 .timer-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.95);
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius);
+  background: var(--surface-2);
 }
 
+/* Amber means something is cooking — the only place this hue appears. */
 .timer-card.running {
-  border-color: rgba(244, 63, 94, 0.4);
-  background: #FFF5F7;
+  border-color: var(--warn);
+  background: var(--warn-quiet);
 }
 
 .timer-digits {
   font-family: var(--font-heading);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.45rem;
+  font-size: 1.9rem;
   font-weight: 700;
-  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .timer-digits.expired {
-  color: var(--danger-color);
-  animation: pulse-danger 1s infinite alternate;
+  color: var(--accent);
 }
 
-@keyframes pulse-danger {
-  from { opacity: 0.7; }
-  to { opacity: 1; }
+/* ----------------------------------------------------------- theme toggle */
+
+.theme-toggle {
+  min-height: 38px;
+  width: 38px;
+  padding: 0;
+  border-radius: var(--radius);
+  color: var(--text-2);
+  flex: none;
 }
 
-/* Badges */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.74rem;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: var(--radius-full);
-  background: rgba(255, 241, 242, 0.7);
-  border: 1px solid rgba(244, 63, 94, 0.2);
-  color: var(--accent-primary);
-}
+/* ------------------------------------------------------------------ small */
 
-.badge.on {
-  border-color: #F43F5E;
-  background: #FFE4E6;
-  color: #BE123C;
-}
+@media (max-width: 640px) {
+  .page {
+    padding: 16px 14px 40px;
+  }
 
-.badge.servings {
-  border-color: rgba(192, 132, 252, 0.4);
-  background: #FAF5FF;
-  color: #7E22CE;
-}
+  .topbar {
+    padding: 12px 14px;
+  }
 
-.notice {
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
-  font-size: 0.88rem;
-  border: 1px solid var(--border);
-  background: var(--surface-subtle);
-}
+  .step-container,
+  .card {
+    padding: 16px;
+  }
 
-.notice.error {
-  border-color: #FCA5A5;
-  background: var(--danger-bg);
-  color: var(--danger-color);
-}
-
-.muted {
-  color: var(--text-muted);
-}
-
-.small {
-  font-size: 0.85rem;
-}
-
-
-/* The live session heading, above the studio. */
-.session-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  padding: 0 8px;
+  .pearl-orb,
+  .ripple-ring {
+    width: 112px;
+    height: 112px;
+  }
 }

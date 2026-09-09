@@ -15,19 +15,19 @@ export function TimerPanel({ timers }: { timers: TimerView[] }) {
 
   if (total === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
+      <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-3)' }}>
         <div
           style={{
             width: 44,
             height: 44,
             borderRadius: '50%',
-            background: 'var(--bg-secondary)',
+            background: 'var(--surface-2)',
             border: '1px solid var(--border)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 12,
-            color: 'var(--accent-primary)',
+            color: 'var(--accent)',
           }}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -35,7 +35,7 @@ export function TimerPanel({ timers }: { timers: TimerView[] }) {
             <polyline points="12 6 12 12 16 14" />
           </svg>
         </div>
-        <p className="small" style={{ margin: 0, fontWeight: 600, color: 'var(--text-primary)' }}>
+        <p className="small" style={{ margin: 0, fontWeight: 600, color: 'var(--text)' }}>
           No active timers
         </p>
         <p className="muted small" style={{ marginTop: 4, marginBottom: 0 }}>
@@ -50,7 +50,7 @@ export function TimerPanel({ timers }: { timers: TimerView[] }) {
       <div className="spread" style={{ marginBottom: 14 }}>
         <div>
           <div className="section-label">Kitchen Timers</div>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', textTransform: 'none' }}>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text)', textTransform: 'none' }}>
             Active Timers
           </h3>
         </div>
@@ -79,7 +79,7 @@ function TimerRow({ timer, now }: { timer: TimerView; now: number | null }) {
           height="18"
           viewBox="0 0 24 24"
           fill="none"
-          stroke={remaining === 0 ? 'var(--danger-color)' : 'var(--accent-primary)'}
+          stroke={remaining === 0 ? 'var(--danger)' : 'var(--accent)'}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"

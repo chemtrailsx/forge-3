@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ThemeToggle } from './ThemeToggle';
 
 export function TopBar({ email, current }: { email: string | null; current: 'cook' | 'profile' }) {
   return (
@@ -15,7 +16,8 @@ export function TopBar({ email, current }: { email: string | null; current: 'coo
           <div className="brand-subtitle">Voice-Guided Kitchen Assistant</div>
         </div>
       </Link>
-      <nav>
+      <nav className="row" style={{ gap: 8 }}>
+        <ThemeToggle />
         {current === 'profile' ? (
           <Link href="/dashboard" className="button ghost">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

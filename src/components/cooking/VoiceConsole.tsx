@@ -243,10 +243,8 @@ export function VoiceConsole({
         <div
           style={{
             background: 'var(--surface)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255, 255, 255, 0.95)',
-            borderRadius: 'var(--radius-xl)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
             padding: '32px 28px 26px',
             boxShadow: 'var(--shadow-md)',
             display: 'flex',
@@ -296,7 +294,7 @@ export function VoiceConsole({
                 fontFamily: 'var(--font-heading)',
                 fontSize: '1.25rem',
                 fontWeight: 700,
-                color: 'var(--text-primary)',
+                color: 'var(--text)',
                 textTransform: 'none',
                 letterSpacing: '-0.01em',
                 margin: 0,
@@ -326,7 +324,7 @@ export function VoiceConsole({
               <span className="muted">or just say &ldquo;say that again&rdquo;</span>
             </div>
             {notHeard ? (
-              <div className="small" style={{ color: 'var(--accent-primary)', marginTop: 6 }}>
+              <div className="small" style={{ color: 'var(--accent)', marginTop: 6 }}>
                 Didn&rsquo;t catch that — say it again a little louder.
               </div>
             ) : null}
@@ -354,7 +352,7 @@ export function VoiceConsole({
                   width: 4,
                   height: `${h}px`,
                   borderRadius: 2,
-                  background: status === 'speaking' ? 'var(--speaking-color)' : 'var(--accent-primary)',
+                  background: status === 'speaking' ? 'var(--info)' : 'var(--accent)',
                   transition: 'height 0.08s ease, background 0.2s ease',
                 }}
               />
@@ -382,7 +380,7 @@ export function VoiceConsole({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.08em',
-                    color: latestEntry.role === 'user' ? 'var(--text-secondary)' : 'var(--accent-primary)',
+                    color: latestEntry.role === 'user' ? 'var(--text-2)' : 'var(--accent)',
                   }}
                 >
                   {latestEntry.role === 'user' ? 'You' : 'Companion'}
@@ -391,7 +389,7 @@ export function VoiceConsole({
                   Latest
                 </span>
               </div>
-              <div style={{ fontSize: '0.96rem', fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+              <div style={{ fontSize: '0.96rem', fontWeight: 500, color: 'var(--text)', lineHeight: 1.45 }}>
                 {latestEntry.text}
               </div>
             </div>
@@ -444,7 +442,7 @@ export function VoiceConsole({
               type="button"
               className="ghost"
               onClick={toggle}
-              style={{ padding: 6, color: status === 'listening' ? 'var(--listening-color)' : 'var(--text-muted)' }}
+              style={{ padding: 6, color: status === 'listening' ? 'var(--ok)' : 'var(--text-3)' }}
               title="Toggle microphone"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -473,10 +471,8 @@ export function VoiceConsole({
       <div
         style={{
           background: 'var(--surface)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255, 255, 255, 0.95)',
-          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
           padding: '24px',
           boxShadow: 'var(--shadow-md)',
           display: 'flex',

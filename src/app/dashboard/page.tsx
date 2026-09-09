@@ -37,11 +37,8 @@ export default async function DashboardPage() {
         className="card"
         style={{
           marginBottom: 24,
-          background: 'linear-gradient(135deg, #FFFFFF 0%, #FAF6F0 100%)',
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-md)',
-          padding: '32px 32px',
-          borderRadius: 'var(--radius-xl)',
+          padding: '28px',
+          borderRadius: 'var(--radius-lg)',
         }}
       >
         <div className="spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
@@ -49,7 +46,7 @@ export default async function DashboardPage() {
             <div className="badge on" style={{ marginBottom: 12 }}>
               Voice-First Kitchen Studio
             </div>
-            <h2 style={{ fontSize: '1.75rem', marginBottom: 8, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+            <h2 style={{ fontSize: '1.75rem', marginBottom: 8, letterSpacing: '-0.02em', color: 'var(--text)' }}>
               What are you cooking today?
             </h2>
             <p className="muted" style={{ margin: 0, fontSize: '0.94rem', lineHeight: 1.6 }}>
@@ -74,7 +71,7 @@ export default async function DashboardPage() {
           </div>
 
           {recipes.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)' }}>
+            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-3)' }}>
               <p className="small" style={{ margin: 0 }}>
                 No recipes saved yet.
               </p>
@@ -87,7 +84,7 @@ export default async function DashboardPage() {
               {recipes.map((recipe) => (
                 <li key={recipe.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, padding: '14px 16px' }}>
                   <div className="spread" style={{ alignItems: 'flex-start' }}>
-                    <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>{recipe.title}</strong>
+                    <strong style={{ fontSize: '0.95rem', color: 'var(--text)' }}>{recipe.title}</strong>
                     <span className="badge" style={{ fontSize: '0.72rem' }}>
                       serves {recipe.servings} &middot; {recipe.steps.length} steps
                     </span>
@@ -115,7 +112,7 @@ export default async function DashboardPage() {
           </div>
 
           {resumable.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)' }}>
+            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-3)' }}>
               <p className="small" style={{ margin: 0 }}>
                 No active cooking sessions.
               </p>
@@ -128,7 +125,7 @@ export default async function DashboardPage() {
               {resumable.map((session) => (
                 <li key={session.id} style={{ padding: '14px 16px' }}>
                   <div>
-                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text)' }}>
                       {session.recipeId ? (titles.get(session.recipeId) ?? 'Recipe') : 'Open Session'}
                     </div>
                     <span className="muted small">

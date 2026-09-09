@@ -6,7 +6,7 @@ import type { CookingStateSnapshot } from '@/lib/types';
 export function IngredientPanel({ state }: { state: CookingStateSnapshot }) {
   if (state.awaitingRecipe) {
     return (
-      <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
+      <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-3)' }}>
         <p className="small" style={{ margin: 0, fontWeight: 500 }}>
           No recipe selected yet
         </p>
@@ -22,7 +22,7 @@ export function IngredientPanel({ state }: { state: CookingStateSnapshot }) {
       <div className="spread" style={{ marginBottom: 14 }}>
         <div>
           <div className="section-label">Recipe Essentials</div>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', textTransform: 'none' }}>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text)', textTransform: 'none' }}>
             Ingredients
           </h3>
         </div>
@@ -53,10 +53,10 @@ export function IngredientPanel({ state }: { state: CookingStateSnapshot }) {
               <li key={substitution.from} className="ingredient-item">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <div className="row" style={{ gap: 6, fontSize: '0.9rem' }}>
-                    <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)' }}>
+                    <span style={{ textDecoration: 'line-through', color: 'var(--text-3)' }}>
                       {substitution.from}
                     </span>
-                    <span style={{ color: 'var(--accent-primary)' }}>&rarr;</span>
+                    <span style={{ color: 'var(--accent)' }}>&rarr;</span>
                     <span style={{ fontWeight: 600 }}>{substitution.to}</span>
                   </div>
                   {substitution.note ? (

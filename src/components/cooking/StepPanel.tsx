@@ -29,7 +29,7 @@ export function StepPanel({ state }: { state: CookingStateSnapshot }) {
       <div className="spread">
         <div>
           <div className="section-label">Active Step</div>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', textTransform: 'none' }}>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text)', textTransform: 'none' }}>
             Step {currentStepNum} of {totalStepsNum}
           </h3>
         </div>

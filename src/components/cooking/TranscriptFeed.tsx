@@ -37,7 +37,7 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
           <div className="section-label">Live Feed</div>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', textTransform: 'none' }}>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text)', textTransform: 'none' }}>
             Conversation
           </h3>
         </div>
@@ -46,19 +46,19 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
 
       <div className="transcript-box" ref={listRef} style={{ flex: 1 }}>
         {entries.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-3)' }}>
             <div
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: '50%',
-                background: 'var(--bg-secondary)',
+                background: 'var(--surface-2)',
                 border: '1px solid var(--border)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: 12,
-                color: 'var(--accent-primary)',
+                color: 'var(--accent)',
               }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -67,7 +67,7 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
                 <line x1="12" y1="19" x2="12" y2="22" />
               </svg>
             </div>
-            <p className="small" style={{ margin: 0, fontWeight: 600, color: 'var(--text-primary)' }}>
+            <p className="small" style={{ margin: 0, fontWeight: 600, color: 'var(--text)' }}>
               Speak naturally to begin
             </p>
             <p className="muted small" style={{ marginTop: 4, marginBottom: 0 }}>
@@ -85,11 +85,11 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
                         width: 18,
                         height: 18,
                         borderRadius: '50%',
-                        background: 'var(--bg-tertiary)',
+                        background: 'var(--surface-3)',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: 'var(--text-secondary)',
+                        color: 'var(--text-2)',
                       }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -103,11 +103,11 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
                         width: 18,
                         height: 18,
                         borderRadius: '50%',
-                        background: 'var(--accent-pastel-pink)',
+                        background: 'var(--accent-quiet)',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: 'var(--accent-primary)',
+                        color: 'var(--accent)',
                       }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
@@ -115,7 +115,7 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
                       </svg>
                     </span>
                   )}
-                  <span style={{ fontWeight: 700, color: entry.role === 'user' ? 'var(--text-secondary)' : 'var(--accent-primary)' }}>
+                  <span style={{ fontWeight: 700, color: entry.role === 'user' ? 'var(--text-2)' : 'var(--accent)' }}>
                     {entry.role === 'user' ? 'You' : 'Companion'}
                   </span>
                 </div>
@@ -126,19 +126,19 @@ export function TranscriptFeed({ entries }: { entries: TranscriptEntry[] }) {
                     </span>
                   ) : null}
                   {entry.interrupted ? (
-                    <span style={{ color: 'var(--danger-color)', fontSize: '0.72rem', fontStyle: 'italic' }}>
+                    <span style={{ color: 'var(--danger)', fontSize: '0.72rem', fontStyle: 'italic' }}>
                       cut off
                     </span>
                   ) : null}
                   {/* So a repeat does not read as the assistant saying something new. */}
                   {entry.replay ? (
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', fontStyle: 'italic' }}>
+                    <span style={{ color: 'var(--text-2)', fontSize: '0.72rem', fontStyle: 'italic' }}>
                       replay
                     </span>
                   ) : null}
                 </div>
               </div>
-              <div style={{ lineHeight: 1.5, color: 'var(--text-primary)' }}>{entry.text}</div>
+              <div style={{ lineHeight: 1.5, color: 'var(--text)' }}>{entry.text}</div>
             </div>
           ))
         )}

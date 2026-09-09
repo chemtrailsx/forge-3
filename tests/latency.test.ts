@@ -20,18 +20,10 @@ const signal = () => new AbortController().signal;
 /** A round trip slow enough that chaining is unmistakable in the total. */
 const RTT = 40;
 
-async function timeTo(
-  events: AsyncGenerator<TurnEvent>,
-  type: TurnEvent['type'],
-): Promise<{ ms: number; events: TurnEvent[] }> {
-  const started = Date.now();
+async function drain(events: AsyncGenerator<TurnEvent>): Promise<TurnEvent[]> {
   const seen: TurnEvent[] = [];
-  let ms = -1;
-  for await (const event of events) {
-    seen.push(event);
-    if (event.type === type && ms < 0) ms = Date.now() - started;
-  }
-  return { ms, events: seen };
+  for await (const event of events) seen.push(event);
+  return seen;
 }
 
 describe('the wait before the first word', () => {
@@ -42,7 +34,7 @@ describe('the wait before the first word', () => {
     const started = Date.now();
     Object.assign(tts, { warm: () => warmedAt.push(Date.now() - started) });
 
-    await timeTo(
+    await drain(
       runTurn({
         db,
         sessionId: ALICE_SESSION,
@@ -51,7 +43,6 @@ describe('the wait before the first word', () => {
         llm: new FakeLlm([{ content: 'Add the spaghetti.' }]),
         tts,
       }),
-      'turn.end',
     );
 
     // Before the reads resolve, not after — on a cold serverless process the
@@ -62,9 +53,9 @@ describe('the wait before the first word', () => {
   });
 
   it('loads the prompt in one wave of queries, not a chain of them', async () => {
-    const { db } = makeDb(ALICE, seedTables(), RTT);
+    const { db, fake } = makeDb(ALICE, seedTables(), RTT);
 
-    const { ms } = await timeTo(
+    await drain(
       runTurn({
         db,
         sessionId: ALICE_SESSION,
@@ -73,39 +64,59 @@ describe('the wait before the first word', () => {
         llm: new FakeLlm([{ content: 'Add the spaghetti.' }]),
         tts: new FakeTts(),
       }),
-      'turn.start',
     );
 
     /*
-     * Two waves are unavoidable: the session has to be read before the recipe
-     * it points at can be. Everything else — the turn index, the memory, the
-     * profile, the history, the timers — depends on none of it and rides
-     * alongside. Six chained trips (240 ms here, ~900 ms against the real
-     * database) was the single largest component of the wait.
+     * Measured as concurrency rather than elapsed time. A prologue that awaits
+     * its reads one after another never gets above one query in flight however
+     * fast the machine is, and one that batches them reaches four — while a
+     * stopwatch assertion only reports which of those happened when the suite
+     * happens to be idle.
+     *
+     * Four: the turn index, the memory, the profile and the history all go out
+     * together with the session read. Only the recipe has to wait, because it
+     * is the session that says which recipe to fetch. Six chained trips was
+     * roughly 900 ms against the real database, and the single largest
+     * component of the wait before the cook heard anything.
      */
-    expect(ms).toBeLessThan(RTT * 3.5);
+    expect(fake.maxConcurrent).toBeGreaterThanOrEqual(4);
   });
 
   it('does not make the cook wait while their own words are written down', async () => {
     const tables = seedTables();
     const { db } = makeDb(ALICE, tables, RTT);
 
-    const { ms, events } = await timeTo(
+    /*
+     * The model is asked while the write of the user's line is still in the
+     * air. Nothing in the prompt depends on that row existing, so awaiting it
+     * put a whole round trip between the cook finishing their sentence and the
+     * model starting to answer.
+     */
+    let writeInFlightWhenAsked = false;
+    const llm = new FakeLlm([{ content: 'Add the spaghetti.' }]);
+    const watched = {
+      ...llm,
+      model: llm.model,
+      complete: llm.complete.bind(llm),
+      stream: llm.stream.bind(llm),
+      streamWithTools(...args: Parameters<typeof llm.streamWithTools>) {
+        writeInFlightWhenAsked = (tables.conversation_turns ?? []).length === 0;
+        return llm.streamWithTools(...args);
+      },
+    };
+
+    const events = await drain(
       runTurn({
         db,
         sessionId: ALICE_SESSION,
         utterance: 'what am I doing now?',
         signal: signal(),
-        llm: new FakeLlm([{ content: 'Add the spaghetti.' }]),
+        llm: watched,
         tts: new FakeTts(),
       }),
-      'assistant.text',
     );
 
-    // The model call and the write of the user's line are independent, so the
-    // write must not sit between the prompt and the answer. With the write
-    // awaited in front of the model this is a whole round trip longer.
-    expect(ms).toBeLessThan(RTT * 3);
+    expect(writeInFlightWhenAsked).toBe(true);
 
     // Still written, and still before the assistant's reply to it: the
     // transcript is read back in turn order and would otherwise interleave
@@ -123,7 +134,7 @@ describe('the wait before the first word', () => {
     );
 
     const llm = new FakeLlm([{ content: 'Eight minutes.' }]);
-    await timeTo(
+    await drain(
       runTurn({
         db: makeDb(ALICE, tables).db,
         sessionId: ALICE_SESSION,
@@ -133,7 +144,6 @@ describe('the wait before the first word', () => {
         llm,
         tts: new FakeTts(),
       }),
-      'turn.end',
     );
 
     // The prompt must carry what the cook heard, not the sentence that was cut
