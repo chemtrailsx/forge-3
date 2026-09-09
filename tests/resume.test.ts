@@ -3,6 +3,7 @@ import { isSameDish } from '@/lib/cooking/same-dish';
 import { executeTool } from '@/lib/tools/registry';
 import { loadCookingState } from '@/lib/cooking/state';
 import { describeState } from '@/lib/llm/prompt';
+import { recentTurns } from '@/lib/db/turns';
 import { ALICE, ALICE_RECIPE, ALICE_SESSION, makeDb, seedTables } from './helpers/fixtures';
 
 /**
@@ -123,5 +124,54 @@ describe('telling one dish from another', () => {
     expect(isSameDish('chicken korma', 'chicken tikka masala')).toBe(false);
     expect(isSameDish('garlic butter pasta', 'chicken biryani')).toBe(false);
     expect(isSameDish('pasta', 'biryani')).toBe(false);
+  });
+});
+
+describe('coming back to a conversation, not a blank page', () => {
+  /*
+   * Reported: "have previous chat history when i open up the session to resume
+   * it." The feed started empty on every load, so a cook returning to a dish
+   * saw no sign that anything had been said — the app looked like it had
+   * forgotten them, whatever the state underneath knew.
+   */
+  const withHistory = () => {
+    const tables = seedTables();
+    (tables.conversation_turns ??= []).push(
+      { id: 't1', user_id: ALICE, session_id: ALICE_SESSION, turn_index: 0, role: 'user', text: 'what am I making again?', heard_text: null, interrupted: false, metrics: {}, created_at: '2026-09-10T10:00:00.000Z' },
+      { id: 't2', user_id: ALICE, session_id: ALICE_SESSION, turn_index: 0, role: 'assistant', text: 'Garlic butter pasta. You are on step two, melting the butter.', heard_text: null, interrupted: false, metrics: {}, created_at: '2026-09-10T10:00:01.000Z' },
+      { id: 't3', user_id: ALICE, session_id: ALICE_SESSION, turn_index: 1, role: 'assistant', text: 'Now toss the pasta through the garlic butter and serve.', heard_text: 'Now toss the pasta', interrupted: true, metrics: {}, created_at: '2026-09-10T10:01:00.000Z' },
+    );
+    return tables;
+  };
+
+  it('reads back what was said in this session, oldest first', async () => {
+    const { db } = makeDb(ALICE, withHistory());
+    const history = await recentTurns(db, ALICE_SESSION, 20);
+
+    expect(history.map((turn) => turn.role)).toEqual(['user', 'assistant', 'assistant']);
+    expect(history[0]?.text).toBe('what am I making again?');
+  });
+
+  it('shows what the cook actually heard of a turn that was cut off', async () => {
+    const { db } = makeDb(ALICE, withHistory());
+    const history = await recentTurns(db, ALICE_SESSION, 20);
+
+    // This is the mapping the cook page performs. Replaying the full sentence
+    // would put words in the feed that never reached the room.
+    const entries = history.map((turn) => ({
+      text: turn.heardText ?? turn.text,
+      interrupted: turn.interrupted,
+    }));
+
+    const cutOff = entries[2];
+    expect(cutOff?.text).toBe('Now toss the pasta');
+    expect(cutOff?.interrupted).toBe(true);
+    expect(cutOff?.text).not.toContain('serve');
+  });
+
+  it('keeps one cook out of another cooks session history', async () => {
+    const tables = withHistory();
+    const { db } = makeDb('22222222-2222-4222-8222-222222222222', tables);
+    expect(await recentTurns(db, ALICE_SESSION, 20)).toEqual([]);
   });
 });

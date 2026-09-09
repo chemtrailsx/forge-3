@@ -32,14 +32,28 @@ const SUGGESTIONS = [
 export type ConsoleProps = {
   sessionId: string;
   initialState: CookingStateSnapshot;
+  /**
+   * What was already said in this session.
+   *
+   * Someone resuming is picking up a conversation, not starting one, and an
+   * empty feed makes the app look like it has forgotten them — which is
+   * exactly what it used to do.
+   */
+  initialTranscript?: TranscriptEntry[];
   sampleRate: number;
   ttsConfigured: boolean;
 };
 
-export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigured }: ConsoleProps) {
+export function VoiceConsole({
+  sessionId,
+  initialState,
+  initialTranscript = [],
+  sampleRate,
+  ttsConfigured,
+}: ConsoleProps) {
   const [state, setState] = useState(initialState);
   const [status, setStatus] = useState<VoiceStatus>('idle');
-  const [entries, setEntries] = useState<TranscriptEntry[]>([]);
+  const [entries, setEntries] = useState<TranscriptEntry[]>(initialTranscript);
   const [level, setLevel] = useState(0);
   const [tool, setTool] = useState<string | null>(null);
   const [filler, setFiller] = useState<string | null>(null);
@@ -157,7 +171,28 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
   const latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
 
   return (
-    <div className="studio-layout">
+    <>
+      {/*
+        The session heading lives here, not on the page around it.
+        Server-rendered it froze at whatever the dish was when the page loaded,
+        so re-planning left the title of an abandoned dish sitting above the
+        steps of the real one.
+      */}
+      <div className="session-heading">
+        <div>
+          <div className="section-label">Active Culinary Session</div>
+          <h1 style={{ margin: 0, fontSize: '1.75rem', letterSpacing: '-0.02em' }}>
+            {state.awaitingRecipe ? 'Ready when you are' : state.title}
+          </h1>
+        </div>
+        {state.awaitingRecipe ? null : (
+          <span className="badge servings" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
+            {state.servings} {state.servings === 1 ? 'serving' : 'servings'}
+          </span>
+        )}
+      </div>
+
+      <div className="studio-layout">
       {/* Center / Left Main Stage */}
       <div className="stack" style={{ flex: 1, minWidth: 0, gap: 20 }}>
         {/* Step instruction banner */}
@@ -445,5 +480,6 @@ export function VoiceConsole({ sessionId, initialState, sampleRate, ttsConfigure
         </div>
       </div>
     </div>
+    </>
   );
 }

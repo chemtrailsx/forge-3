@@ -37,6 +37,7 @@ Starting a dish:
 - You can cook anything. Their saved recipes are a convenience, never the limit of what you will help with. Never say you cannot help because a dish is not saved, not in your list, or not one you have — write it. If you did not catch which dish they said, ask them to say it again; do not tell them you do not have it.
 - The same applies mid-session: if they change their mind and name a different dish, plan the new one. Do not make them start a new session.
 - But naming the dish they are already cooking is not a request to start it again. Someone coming back to a session says "we were doing the white sauce pasta" — that is asking where they were, not asking you to write it out afresh. Tell them the step they are on.
+- Before you write it, settle how many people it is for, because every quantity in the recipe depends on it and a recipe scaled after the fact is a recipe someone has already shopped for. One short question — and if you have been told their usual number, offer that instead of asking cold: "Four, as usual?" A single word back is enough.
 - Then, before the first step, run the ingredient check out loud. Name what the dish needs — briefly, in one breath, grouped the way a person would say them — and ask whether they have it all. This is the one time a list belongs in speech: they cannot see the screen, and this is the last moment when a missing ingredient is cheap to work around rather than a ruined pan.
 - Take whatever they answer and adapt: substitute what they lack, drop it, or offer a different dish. Only once that is settled, give the first step.
 - If they have already told you what is in the kitchen, build the recipe around it and check only the things you are unsure of.
@@ -72,8 +73,15 @@ export function describeState(state: CookingStateSnapshot): string {
   if (state.awaitingRecipe) {
     return [
       'No dish chosen yet. This session is empty.',
-      'The moment the user says what they want to cook, call plan_recipe.',
-      state.servings ? `They appear to be cooking for ${state.servings}.` : '',
+      'When the user says what they want to cook: settle how many people it is for, then call plan_recipe.',
+      /*
+       * Deliberately not quoting a number here. The snapshot falls back to two
+       * when nothing is known, and telling the model that two is "their usual"
+       * would put an invented figure in its mouth. A real one, if there is
+       * one, reaches the prompt through the memory section as "usually cooks
+       * for N" — so ask when that is absent, and offer it when it is not.
+       */
+      'If you have been told a number they usually cook for, offer it rather than asking cold. If not, ask.',
     ]
       .filter(Boolean)
       .join('\n');

@@ -82,3 +82,30 @@ describe('everything the cook needs is spoken', () => {
     expect(SYSTEM_PROMPT).toMatch(/substitute what they lack/i);
   });
 });
+
+describe('how many people it is for', () => {
+  /*
+   * Reported: "it shd ask me stuff about how many ppl this is for for accurate
+   * measurements". Every quantity depends on it, and scaling afterwards is too
+   * late for someone who has already measured.
+   */
+  it('settles the number before writing the recipe', () => {
+    expect(SYSTEM_PROMPT).toMatch(/settle how many people it is for/i);
+    expect(SYSTEM_PROMPT).toMatch(/before you write it/i);
+  });
+
+  it('offers the number it already knows rather than asking cold', () => {
+    expect(SYSTEM_PROMPT).toMatch(/as usual/i);
+    const described = describeState(buildSnapshot(EMPTY_SESSION, null, []));
+    expect(described).toMatch(/how many people it is for/i);
+    expect(described).toMatch(/If not, ask/i);
+  });
+
+  it('never presents the fallback serving count as something the user said', () => {
+    // buildSnapshot falls back to two when no recipe and no note exist. That
+    // number is an assumption, and quoting it back as "your usual" would be
+    // the assistant inventing a preference and then cooking to it.
+    const described = describeState(buildSnapshot(EMPTY_SESSION, null, []));
+    expect(described).not.toMatch(/usual is 2|usually cooks for 2|2, as usual/i);
+  });
+});
