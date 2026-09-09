@@ -35,8 +35,15 @@ export function StepPanel({ state }: { state: CookingStateSnapshot }) {
         </div>
         <div className="row" style={{ gap: 8 }}>
           {passive ? (
-            <span className="badge" style={{ borderColor: '#D8CCE8', background: '#F5EEFD', color: '#7C4DFF' }}>
-              Timed Step
+            <span
+              className="badge"
+              style={{
+                borderColor: 'var(--warn)',
+                background: 'var(--warn-quiet)',
+                color: 'var(--warn)',
+              }}
+            >
+              Timed step
             </span>
           ) : null}
           <span className="badge servings">
@@ -55,7 +62,7 @@ export function StepPanel({ state }: { state: CookingStateSnapshot }) {
       </div>
 
       {passive ? (
-        <p className="small" style={{ marginBottom: 14, color: '#7C4DFF', fontWeight: 500 }}>
+        <p className="small" style={{ marginBottom: 14, color: 'var(--warn)', fontWeight: 500 }}>
           This step runs by itself &mdash; your assistant will notify you when it finishes.
         </p>
       ) : null}

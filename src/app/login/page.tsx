@@ -55,13 +55,7 @@ export default function LoginPage() {
 
       <div
         className="card"
-        style={{
-          background: '#FFFFFF',
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-md)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '32px 28px',
-        }}
+        style={{ padding: '32px 28px' }}
       >
         {configured ? (
           <LoginForm />
